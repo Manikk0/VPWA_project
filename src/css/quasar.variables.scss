@@ -12,14 +12,15 @@
 // to match your app's branding.
 // Tip: Use the "Theme Builder" on Quasar's documentation website.
 
-$primary: #1976d2;
-$secondary: #26a69a;
-$accent: #9c27b0;
+// nastavenie hlavnych farieb podla palety
+$primary: #3a5a40;
+$secondary: #588157;
+$accent: #a3b18a;
+$dark: #344e41;
+$dark-page: #344e41;
 
-$dark: #1d1d1d;
-$dark-page: #121212;
-
-$positive: #21ba45;
+// stavove farby
+$positive: #588157;
 $negative: #c10015;
-$info: #31ccec;
+$info: #a3b18a;
 $warning: #f2c037;

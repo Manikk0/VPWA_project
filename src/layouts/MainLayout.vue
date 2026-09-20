@@ -1,23 +1,104 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
+  <!-- hlavny layout celej aplikacie -->
+  <q-layout view="hHh lpR fFf" class="bg-dust-grey">
+    <!-- horna lista -->
+    <q-header elevated class="bg-pine-teal text-dust-grey">
       <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
+        <!-- tlacidlo na otvorenie laveho menu s kanalmi -->
+        <q-btn flat dense round icon="menu" @click="toggleLeftDrawer" />
 
-        <q-toolbar-title> Quasar App </q-toolbar-title>
+        <!-- nazov aplikacie -->
+        <q-toolbar-title class="text-weight-bold"> nasa aplikacia </q-toolbar-title>
 
-        <div>Quasar v{{ $q.version }}</div>
+        <!-- aktualny stav prihlaseneho pouzivatela -->
+        <q-badge color="fern" text-color="dust-grey" class="q-mr-sm"> Online </q-badge>
+
+        <!-- tlacidlo na otvorenie praveho menu so zoznamom clenov -->
+        <q-btn flat dense round icon="people" @click="toggleRightDrawer" />
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <q-list>
-        <q-item-label header> Essential Links </q-item-label>
+    <!-- lavy bocny panel so zoznamom kanalov -->
+    <q-drawer v-model="leftDrawerOpen" side="left" bordered class="bg-hunter-green text-dust-grey">
+      <!-- profil prihlaseneho pouzivatela -->
+      <div class="q-pa-md bg-pine-teal text-dust-grey">
+        <div class="text-subtitle1 text-weight-bold">Meno Pouzivatela</div>
+      </div>
 
-        <EssentialLink v-for="link in linksList" :key="link.label" v-bind="link" />
+      <q-separator color="fern" />
+
+      <!-- sekcia s kanalmi -->
+      <div class="q-pa-sm">
+        <div class="row items-center justify-between q-px-sm q-py-xs">
+          <span class="text-caption text-dry-sage text-weight-bold">KANALY</span>
+          <!-- tlacidlo na pridanie kanala -->
+          <q-btn flat dense round size="sm" icon="add" class="text-dry-sage" />
+        </div>
+
+        <!-- ukazkovy zoznam kanalov -->
+        <q-list dense>
+          <!-- verejny kanal 1 (aktivny) -->
+          <q-item clickable v-ripple active-class="bg-fern text-dust-grey" :active="true">
+            <q-item-section avatar class="text-dust-grey">
+              <q-icon name="tag" />
+            </q-item-section>
+            <q-item-section class="text-dust-grey">general</q-item-section>
+          </q-item>
+
+          <!-- verejny kanal 2 -->
+          <q-item clickable v-ripple>
+            <q-item-section avatar>
+              <q-icon name="tag" />
+            </q-item-section>
+            <q-item-section>random</q-item-section>
+          </q-item>
+
+          <!-- sukromny kanal -->
+          <q-item clickable v-ripple>
+            <q-item-section avatar>
+              <q-icon name="lock" />
+            </q-item-section>
+            <q-item-section>tajny-projekt</q-item-section>
+          </q-item>
+        </q-list>
+      </div>
+    </q-drawer>
+
+    <!-- pravy bocny panel so zoznamom clenov v kanali -->
+    <q-drawer
+      v-model="rightDrawerOpen"
+      side="right"
+      bordered
+      class="bg-hunter-green text-dust-grey"
+    >
+      <div class="q-pa-md bg-pine-teal text-weight-bold">Clenovia kanala (3)</div>
+      <q-separator color="fern" />
+
+      <q-list dense class="q-pa-sm">
+        <!-- clen 1 -->
+        <q-item clickable v-ripple>
+          <q-item-section>
+            <q-item-label>adam</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <!-- clen 2 -->
+        <q-item clickable v-ripple>
+          <q-item-section>
+            <q-item-label>ed</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <!-- clen 3 -->
+        <q-item clickable v-ripple>
+          <q-item-section>
+            <q-item-label>peter</q-item-label>
+          </q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 
+    <!-- hlavny obsah stranky kde sa nacitava chat -->
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -25,57 +106,22 @@
 </template>
 
 <script setup>
+// zakladne vue funkcie
 import { ref } from 'vue'
-import EssentialLink from '@/components/EssentialLink.vue'
 
-const linksList = [
-  {
-    label: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev',
-  },
-  {
-    label: 'GitHub',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework',
-  },
-  {
-    label: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev',
-  },
-  {
-    label: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev',
-  },
-  {
-    label: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev',
-  },
-  {
-    label: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev',
-  },
-  {
-    label: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev',
-  },
-]
+// stav ci je otvoreny lavy panel (predvolene otvoreny)
+const leftDrawerOpen = ref(true)
 
-const leftDrawerOpen = ref(false)
+// stav ci je otvoreny pravy panel so zoznamom pouzivatelov
+const rightDrawerOpen = ref(false)
 
+// funkcia na prepinanie laveho menu
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
+}
+
+// funkcia na prepinanie praveho menu
+function toggleRightDrawer() {
+  rightDrawerOpen.value = !rightDrawerOpen.value
 }
 </script>
