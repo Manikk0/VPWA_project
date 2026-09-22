@@ -9,14 +9,32 @@
       </div>
 
       <!-- pomocne tlacidla pre kanal -->
-      <div>
-        <q-btn flat dense icon="info" class="text-pine-teal" />
+      <div class="row items-center q-gutter-xs">
+        <!-- tlacidlo na otvorenie praveho menu so zoznamom clenov -->
+        <q-btn flat dense round icon="people" class="text-pine-teal" @click="toggleRightDrawer">
+          <q-tooltip>Clenovia kanala</q-tooltip>
+        </q-btn>
+
+        <!-- tlacidlo na pozvanie noveho clena do kanala -->
+        <q-btn flat dense round icon="person_add" class="text-pine-teal">
+          <q-tooltip>Pozvat clena</q-tooltip>
+        </q-btn>
+
+        <!-- tlacidlo na opustenie kanala -->
+        <q-btn flat dense round icon="logout" class="text-pine-teal">
+          <q-tooltip>Opustit kanal</q-tooltip>
+        </q-btn>
+
+        <!-- tlacidlo na zrusenie kanala -->
+        <q-btn v-if="isChannelAdmin" flat dense round icon="delete" class="text-pine-teal">
+          <q-tooltip>Zrusit kanal</q-tooltip>
+        </q-btn>
       </div>
     </div>
 
     <!-- priestor pre zoznam sprav -->
     <div class="col q-pa-md overflow-auto">
-      <!-- ukazkova sprava 1 (iny pouzivatel) -->
+      <!-- ukazkova sprava 1 -->
       <div class="q-mb-md q-pa-sm bg-white rounded-borders shadow-1" style="max-width: 70%">
         <div class="text-weight-bold text-hunter-green">
           ed <span class="text-caption text-grey">12:30</span>
@@ -24,18 +42,26 @@
         <div class="text-dark">Ahoj vsetci, toto je ukazkova sprava v kanali.</div>
       </div>
 
-      <!-- ukazkova sprava 2 (iny pouzivatel - peter) -->
-      <div class="q-mb-md q-pa-sm bg-white rounded-borders shadow-1" style="max-width: 70%">
+      <!-- ukazkova sprava 2 -->
+      <div
+        class="q-mb-md q-pa-sm bg-dry-sage rounded-borders shadow-2 mentioned-message"
+        style="max-width: 70%"
+      >
+        <!-- hlavicka spravy s menom odosielatela -->
         <div class="text-weight-bold text-hunter-green">
-          peter <span class="text-caption text-grey">12:32</span>
+          peter <span class="text-caption text-grey-7">12:32</span>
         </div>
-        <div class="text-dark">
-          Pozdravujem <span class="text-weight-bold text-hunter-green">@moj_nick</span>, pozri si
-          novy dizajn!
+
+        <!-- text spravy kde je pouzivatel oznaceny -->
+        <div class="text-dark q-mt-xs">
+          Pozdravujem
+          <span class="bg-hunter-green text-dust-grey q-px-xs rounded-borders text-weight-bold">
+            @moj_nick </span
+          >, pozri si novy dizajn!
         </div>
       </div>
 
-      <!-- ukazkova sprava 3 (moja odoslana sprava) -->
+      <!-- ukazkova sprava 3 -->
       <div
         class="q-mb-md q-pa-sm bg-fern text-white rounded-borders shadow-1 q-ml-auto"
         style="max-width: 70%"
@@ -47,7 +73,7 @@
       </div>
     </div>
 
-    <!-- spodny fixny prikazovy riadok / input na pisanie sprav -->
+    <!-- spodny prikazovy riadok -->
     <div class="q-pa-md bg-pine-teal">
       <div class="row items-center q-gutter-sm">
         <!-- textove pole pre spravu alebo prikaz -->
@@ -61,26 +87,21 @@
         />
 
         <!-- tlacidlo na odoslanie -->
-        <q-btn round color="fern" icon="send" text-color="dust-grey" @click="sendMessage" />
+        <q-btn round color="fern" icon="send" text-color="dust-grey" />
       </div>
     </div>
   </q-page>
 </template>
 
 <script setup>
-// zakladne vue funkcie
-import { ref } from 'vue'
+import { ref, inject } from 'vue'
 
-// text aktualne pisanej spravy v inpute
+// funkcia na prepnutie praveho panelu so zoznamom clenov z layoutu
+const toggleRightDrawer = inject('toggleRightDrawer', () => {})
+
+// zobrazenie prvkov pre spravcu kanala
+const isChannelAdmin = ref(true)
+
+// ukazkovy text v prikazovom riadku
 const messageText = ref('')
-
-// jednoducha funkcia na odoslanie spravy
-function sendMessage() {
-  if (messageText.value.trim() !== '') {
-    // zatial len vypis do konzoly pre test
-    console.log('Odoslana sprava:', messageText.value)
-    // vycistenie pola
-    messageText.value = ''
-  }
-}
 </script>

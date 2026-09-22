@@ -1,4 +1,10 @@
 const routes = [
+  // prihlasovacia stranka (login a registracia)
+  {
+    path: '/login',
+    component: () => import('@/pages/AuthPage.vue'),
+  },
+
   {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
