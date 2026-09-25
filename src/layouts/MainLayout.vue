@@ -38,7 +38,7 @@
                     <q-badge rounded :color="st.color" />
                   </q-item-section>
                   <q-item-section>{{ st.label }}</q-item-section>
-                  <!-- značka fajky pri stave -->
+                  <!-- znacka fajky pri stave -->
                   <q-item-section v-if="userStatus === st.label" side>
                     <q-icon name="check" size="xs" color="dry-sage" />
                   </q-item-section>
@@ -53,10 +53,12 @@
             <q-tooltip>Profil pouzivatela</q-tooltip>
           </q-btn>
 
-          <!-- dvojriadkovy blok s menom a prezyvkou pouzivatela -->
+          <!-- blok s menom pouzivatela -->
           <div class="column justify-center text-left leading-tight q-mr-xs">
             <span class="text-weight-bold text-caption">Meno Pouzivatela</span>
-            <span class="text-caption text-dry-sage" style="font-size: 11px">@moj_nick</span>
+            <span class="text-caption text-dry-sage" style="font-size: 11px">{{
+              chatStore.currentUser
+            }}</span>
           </div>
 
           <!-- tlacidlo na odhlasenie -->
@@ -72,22 +74,33 @@
       <div class="q-pa-sm">
         <div class="row items-center justify-between q-px-sm q-py-xs">
           <span class="text-caption text-dry-sage text-weight-bold">KANALY</span>
-          <!-- tlacidlo na pridanie kanala -->
-          <q-btn flat dense round size="sm" icon="add" class="text-dry-sage" />
+          <!-- tlacidlo na vytvorenie kanala cez dialog -->
+          <q-btn
+            flat
+            dense
+            round
+            size="sm"
+            icon="add"
+            class="text-dry-sage"
+            @click="promptAddChannel"
+          >
+            <q-tooltip>Vytvoriť kanál</q-tooltip>
+          </q-btn>
         </div>
 
-        <!-- zoznam kanalov -->
+        <!-- zoznam kanalov zo storu -->
         <q-list dense>
           <q-item
-            v-for="ch in channels"
+            v-for="ch in chatStore.channels"
             :key="ch.name"
             clickable
             v-ripple
-            :active="ch.active"
+            :active="ch.name === chatStore.activeChannelName"
             active-class="bg-fern text-dust-grey"
+            @click="chatStore.selectChannel(ch.name)"
           >
             <q-item-section avatar>
-              <q-icon :name="ch.icon" />
+              <q-icon :name="ch.isPrivate ? 'lock' : 'tag'" />
             </q-item-section>
             <q-item-section>{{ ch.name }}</q-item-section>
           </q-item>
@@ -103,14 +116,32 @@
       class="bg-hunter-green text-dust-grey"
     >
       <div class="q-pa-md bg-pine-teal text-weight-bold">
-        Clenovia kanala ({{ members.length }})
+        Clenovia kanala (#{{ chatStore.activeChannelName }})
       </div>
       <q-separator color="fern" />
 
-      <!-- zoznam clenov -->
+      <!-- zoznam clenov zo storu -->
       <q-list dense class="q-pa-sm">
-        <q-item v-for="m in members" :key="m" clickable v-ripple>
-          <q-item-section>{{ m }}</q-item-section>
+        <q-item
+          v-for="m in chatStore.activeChannel?.members || []"
+          :key="m.name"
+          clickable
+          v-ripple
+        >
+          <q-item-section>
+            <div class="row items-center justify-between">
+              <span>{{ m.name }}</span>
+              <!-- stitok Admin ak je pouzivatel spravcom -->
+              <q-badge
+                v-if="m.role === 'admin'"
+                color="fern"
+                text-color="dust-grey"
+                class="q-ml-xs"
+              >
+                Admin
+              </q-badge>
+            </div>
+          </q-item-section>
         </q-item>
       </q-list>
     </q-drawer>
@@ -125,11 +156,16 @@
 <script setup>
 import { ref, provide } from 'vue'
 import { APP_NAME } from '@/config/app'
+import { useChatStore } from '@/stores/chatStore'
+import { Dialog } from 'quasar'
+
+// nacitanie storu pre chat
+const chatStore = useChatStore()
 
 const leftDrawerOpen = ref(true)
 const rightDrawerOpen = ref(false)
 
-// poskytnutie funkcie pre potomkov (IndexPage) na prepnutie zoznamu clenov
+// poskytnutie funkcie pre potomkov na prepnutie praveho panela
 provide('toggleRightDrawer', () => {
   rightDrawerOpen.value = !rightDrawerOpen.value
 })
@@ -142,13 +178,21 @@ const statuses = [
   { label: 'Offline', color: 'grey-6' },
 ]
 
-// zoznam kanalov
-const channels = [
-  { name: 'general', icon: 'tag', active: true },
-  { name: 'random', icon: 'tag' },
-  { name: 'tajny-projekt', icon: 'lock' },
-]
-
-// zoznam clenov
-const members = ['adam', 'ed', 'peter']
+// funkcia pre priradenie/vytvorenie kanala cez dialog po kliknuti na '+'
+function promptAddChannel() {
+  Dialog.create({
+    title: 'Vytvoriť kanál',
+    message: 'Napište názov nového kanála:',
+    prompt: {
+      model: '',
+      type: 'text',
+    },
+    cancel: true,
+    persistent: true,
+  }).onOk((data) => {
+    if (data && data.trim()) {
+      chatStore.joinChannel(data.trim(), false)
+    }
+  })
+}
 </script>
