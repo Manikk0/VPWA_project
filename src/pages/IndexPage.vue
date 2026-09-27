@@ -35,7 +35,14 @@
           </q-btn>
 
           <!-- tlacidlo na pozvanie noveho clena do kanala -->
-          <q-btn flat dense round icon="person_add" class="text-pine-teal">
+          <q-btn
+            flat
+            dense
+            round
+            icon="person_add"
+            class="text-pine-teal"
+            @click="promptInviteUser"
+          >
             <q-tooltip>Pozvat clena</q-tooltip>
           </q-btn>
 
@@ -67,39 +74,59 @@
       </div>
 
       <!-- priestor pre zoznam sprav -->
-      <div class="col q-pa-md overflow-auto">
-        <!-- ukazkova sprava 1 -->
-        <div class="q-mb-md q-pa-sm bg-white rounded-borders shadow-1" style="max-width: 70%">
-          <div class="text-weight-bold text-hunter-green">
-            ed <span class="text-caption text-grey">12:30</span>
-          </div>
-          <div class="text-dark">
-            Ahoj vsetci, toto je ukazkova sprava v kanali #{{ chatStore.activeChannelName }}.
+      <div ref="messagesContainer" class="col q-pa-md overflow-auto">
+        <!-- oznam ak v kanali este nie su ziadne spravy -->
+        <div v-if="chatStore.activeMessages.length === 0" class="text-center text-grey-7 q-pa-xl">
+          <q-icon name="chat_bubble_outline" size="48px" class="q-mb-sm text-grey-5" />
+          <div class="text-subtitle1 text-weight-medium">
+            Zatiaľ žiadne správy v kanáli #{{ chatStore.activeChannelName }}
           </div>
         </div>
 
-        <!-- ukazkova sprava 2 -->
-        <div class="q-mb-md q-pa-sm bg-white rounded-borders shadow-1" style="max-width: 70%">
-          <div class="text-weight-bold text-hunter-green">
-            peter <span class="text-caption text-grey">12:32</span>
-          </div>
-          <div class="text-dark">
-            Pozdravujem
-            <span class="bg-hunter-green text-dust-grey q-px-xs rounded-borders text-weight-bold">
-              @moj_nick </span
-            >, pozri si novy dizajn!
-          </div>
-        </div>
-
-        <!-- ukazkova sprava 3 -->
+        <!-- dynamicky zoznam sprav z aktualneho kanala -->
         <div
-          class="q-mb-md q-pa-sm bg-fern text-white rounded-borders shadow-1 q-ml-auto"
-          style="max-width: 70%"
+          v-for="(msg, index) in chatStore.activeMessages"
+          :key="index"
+          class="q-mb-md q-pa-sm rounded-borders shadow-1"
+          :class="[
+            msg.user === chatStore.currentUser ? 'bg-fern text-white q-ml-auto' : 'bg-white',
+            isMentioned(msg) ? 'mentioned-message' : '',
+          ]"
+          style="max-width: 70%; width: fit-content; min-width: 140px"
         >
-          <div class="text-weight-bold text-dust-grey">
-            @moj_nick <span class="text-caption text-dust-grey">12:35</span>
+          <!-- meno odosielatela a cas spravy -->
+          <div
+            class="text-weight-bold row items-center justify-between q-gutter-xs"
+            :class="msg.user === chatStore.currentUser ? 'text-dust-grey' : 'text-hunter-green'"
+          >
+            <span>{{ msg.user }}</span>
+            <span
+              class="text-caption"
+              :class="msg.user === chatStore.currentUser ? 'text-dust-grey' : 'text-grey'"
+            >
+              {{ msg.time }}
+            </span>
           </div>
-          <div>Super, vyzera to fajn a cisto.</div>
+
+          <!-- text samotnej spravy so zvyraznenim zavinaca -->
+          <div
+            class="q-mt-xs"
+            :class="msg.user === chatStore.currentUser ? 'text-white' : 'text-dark'"
+            style="word-break: break-word"
+          >
+            <span v-for="(word, wIndex) in msg.text.split(' ')" :key="wIndex">
+              <!-- ak slovo zacina @, zvyraznime ho ako stitok -->
+              <span
+                v-if="word.startsWith('@')"
+                class="bg-hunter-green text-dust-grey q-px-xs rounded-borders text-weight-bold"
+              >
+                {{ word }}
+              </span>
+              <!-- inak je to bezne slovo v sprave -->
+              <span v-else>{{ word }}</span>
+              {{ ' ' }}
+            </span>
+          </div>
         </div>
       </div>
     </template>
@@ -113,7 +140,7 @@
           dense
           outlined
           bg-color="white"
-          placeholder="Napis spravu alebo prikaz (napr. /join nazov [private], /quit, /cancel, /list)..."
+          placeholder="Napis spravu alebo prikaz (napr. /join nazov, /invite @nick, /kick @nick, /revoke @nick, /quit, /cancel, /list)..."
           class="col"
           @keyup.enter="handleSend"
         />
@@ -126,7 +153,7 @@
 </template>
 
 <script setup>
-import { ref, inject } from 'vue'
+import { ref, inject, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chatStore'
 import { Notify } from 'quasar'
 
@@ -136,8 +163,26 @@ const chatStore = useChatStore()
 // funkcia na prepnutie praveho panelu zo zoznamom clenov z layoutu
 const toggleRightDrawer = inject('toggleRightDrawer', () => {})
 
+// odkaz na kontajner so spravami
+const messagesContainer = ref(null)
+
 // text v prikazovom riadku
 const messageText = ref('')
+
+// funkcia zisti ci je v sprave od ineho pouzivatela spomenuty aktualne prihlaseny pouzivatel
+function isMentioned(msg) {
+  if (msg.user === chatStore.currentUser) return false
+  return msg.text.includes(chatStore.currentUser)
+}
+
+// funkcia na posun chatu uplne na spodok pri novej sprave
+function scrollToBottom() {
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+  })
+}
 
 // funkcia na spracovanie odoslania spravy alebo prikazu
 function handleSend() {
@@ -154,22 +199,40 @@ function handleSend() {
       const channelName = parts[1] || ''
       const isPrivate = parts[2] && parts[2].toLowerCase() === 'private'
       chatStore.joinChannel(channelName, isPrivate)
+    } else if (command === '/invite') {
+      // prikaz: /invite @user
+      const nickName = parts[1] || ''
+      chatStore.inviteUser(nickName)
     } else if (command === '/quit') {
       // prikaz: /quit
       chatStore.quitChannel()
     } else if (command === '/cancel') {
       // prikaz: /cancel
       chatStore.cancelChannel()
+    } else if (command === '/kick') {
+      // prikaz: /kick @nick
+      const nickName = parts[1] || ''
+      chatStore.kickUser(nickName)
+    } else if (command === '/revoke') {
+      // prikaz: /revoke @nick
+      const nickName = parts[1] || ''
+      chatStore.revokeUser(nickName)
     } else if (command === '/list') {
       // prikaz: /list
       toggleRightDrawer()
     } else {
       Notify.create({
         type: 'warning',
-        message: `Neznamy prikaz: ${command}. Podporovane: /join, /quit, /cancel, /list`,
+        message: `Neznamy prikaz: ${command}. Podporovane: /join, /invite, /kick, /revoke, /quit, /cancel, /list`,
       })
     }
+  } else {
+    // ak text nezacina lomitkom, je to obycajna sprava
+    chatStore.sendMessage(text)
+    // posunieme chat na najnovsiu spravu
+    scrollToBottom()
   }
+
   // vycistenie vstupneho pola
   messageText.value = ''
 }

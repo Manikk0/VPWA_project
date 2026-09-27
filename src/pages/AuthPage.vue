@@ -37,24 +37,39 @@
         <!-- pole pre email -->
         <div>
           <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Email</div>
-          <q-input type="email" bg-color="white" outlined dense placeholder="Zadajte email" />
+          <q-input
+            v-model="email"
+            type="email"
+            bg-color="white"
+            outlined
+            dense
+            placeholder="Zadajte email"
+          />
         </div>
 
         <!-- pole pre heslo -->
         <div>
           <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Heslo</div>
-          <q-input type="password" bg-color="white" outlined dense placeholder="Zadajte heslo" />
+          <q-input
+            v-model="password"
+            type="password"
+            bg-color="white"
+            outlined
+            dense
+            placeholder="Zadajte heslo"
+            @keyup.enter="handleSubmit"
+          />
         </div>
 
         <!-- tlacidlo na prechod do aplikacie -->
         <q-btn
-          to="/"
           :label="isRegisterMode ? 'Zaregistrovať sa' : 'Prihlásiť sa'"
           color="pine-teal"
           text-color="dust-grey"
           class="full-width text-weight-bold q-mt-md"
           unelevated
           size="md"
+          @click="handleSubmit"
         />
 
         <!-- prepinanie medzi prihlasenim a registraciou -->
@@ -74,6 +89,58 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { APP_NAME } from '@/config/app'
+import { useChatStore } from '@/stores/chatStore'
+import { users } from '@/mockData'
+import { Notify } from 'quasar'
+
+const router = useRouter()
+const chatStore = useChatStore()
+
 const isRegisterMode = ref(false)
+
+// hodnoty z formulara
+const email = ref('')
+const password = ref('')
+
+// funkcia na spracovanie prihlasenia
+function handleSubmit() {
+  if (isRegisterMode.value) {
+    router.push('/')
+    return
+  }
+
+  // kontrola ci zadal email a heslo
+  if (!email.value || !password.value) {
+    Notify.create({
+      type: 'warning',
+      message: 'Zadajte email aj heslo!',
+    })
+    return
+  }
+
+  // zistenie ci pouzivatel s takym emailom existuje
+  const user = users.find((u) => u.email === email.value)
+  if (!user) {
+    Notify.create({
+      type: 'negative',
+      message: 'Používateľ s týmto emailom neexistuje!',
+    })
+    return
+  }
+
+  // overenie spravnosti hesla
+  if (user.password !== password.value) {
+    Notify.create({
+      type: 'negative',
+      message: 'Nesprávne heslo!',
+    })
+    return
+  }
+
+  // ak je vsetko v poriadku tak ulozime pozivatela a presmerujeme do aplikacie
+  chatStore.currentUser = user.nick
+  router.push('/')
+}
 </script>

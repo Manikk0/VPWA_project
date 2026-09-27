@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { Notify, Dialog } from 'quasar'
+import { users, channels, messages } from '@/mockData'
 
 // jednoduchy store pre spravu kanalov a pouzivatelov
 export const useChatStore = defineStore('chat', {
@@ -7,48 +8,25 @@ export const useChatStore = defineStore('chat', {
     // aktualne prihlaseny pouzivatel
     currentUser: '@moj_nick',
 
+    // zoznam vsetkych registrovanych pouzivatelov
+    allUsers: users.map((u) => u.nick),
+
     // meno aktualne vybraneho kanala
     activeChannelName: 'general',
 
-    // predvoleny zoznam kanalov pre prezentaciu
-    channels: [
-      {
-        name: 'general',
-        isPrivate: false,
-        createdBy: '@moj_nick',
-        description: 'Vseobecny kanal pre novinky a pokec.',
-        members: [
-          { name: '@moj_nick', role: 'admin' },
-          { name: 'jozef', role: 'member' },
-          { name: 'ed', role: 'member' },
-          { name: 'peter', role: 'member' },
-        ],
-      },
-      {
-        name: 'test1',
-        isPrivate: true,
-        createdBy: '@moj_nick',
-        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-        members: [
-          { name: '@moj_nick', role: 'admin' },
-          { name: 'ed', role: 'member' },
-        ],
-      },
-      {
-        name: 'test2',
-        isPrivate: false,
-        createdBy: 'jozef',
-        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-        members: [
-          { name: 'jozef', role: 'admin' },
-          { name: '@moj_nick', role: 'member' },
-          { name: 'peter', role: 'member' },
-        ],
-      },
-    ],
+    // predvoleny zoznam kanalov
+    channels: channels,
+
+    // ulozisko sprav pre jednotlive kanaly
+    messages: messages,
   }),
 
   getters: {
+    // vrati zoznam sprav pre aktualne vybrany kanal
+    activeMessages: (state) => {
+      return state.messages[state.activeChannelName] || []
+    },
+
     // vrati objekt aktualne vybraneho kanala
     activeChannel: (state) => {
       let found = state.channels.find((c) => c.name === state.activeChannelName)
@@ -102,6 +80,11 @@ export const useChatStore = defineStore('chat', {
         }
         this.channels.push(newChannel)
         this.activeChannelName = cleanName
+
+        // inicializacia prazdneho zoznamu sprav pre novovytvoreny kanal
+        if (!this.messages[cleanName]) {
+          this.messages[cleanName] = []
+        }
 
         const typText = isPrivate ? 'sukromny' : 'verejny'
         Notify.create({
@@ -177,6 +160,139 @@ export const useChatStore = defineStore('chat', {
           color: 'warning',
         })
       }
+    },
+
+    // funkcia na odoslanie spravy do aktualneho kanala
+    sendMessage(text) {
+      // ak nie je vybrany ziadny kanal alebo je text prazdny, nic nespravime
+      if (!this.activeChannelName || !text || !text.trim()) return
+
+      // ak nahodou pre dany kanal este neexistuje pole sprav v dictionary, vytvorime ho
+      if (!this.messages[this.activeChannelName]) {
+        this.messages[this.activeChannelName] = []
+      }
+
+      // zistenie aktualneho casu vo formate HH:mm
+      const now = new Date()
+      const hours = String(now.getHours()).padStart(2, '0')
+      const minutes = String(now.getMinutes()).padStart(2, '0')
+      const currentTime = `${hours}:${minutes}`
+
+      // vytvorenie noveho objektu spravy
+      const newMessage = {
+        user: this.currentUser,
+        time: currentTime,
+        text: text.trim(),
+      }
+
+      // pridanie spravy do zoznamu sprav pre aktualny kanal
+      this.messages[this.activeChannelName].push(newMessage)
+    },
+
+    // vyhodenie pouzivatela z kanala
+    kickUser(nickName) {
+      if (!this.activeChannel || !nickName) return
+
+      // najdeme pouzivatela v zozname clenov podla nicku so zavinacom
+      const memberIndex = this.activeChannel.members.findIndex(
+        (m) => m.name === nickName || m.name === nickName.replace('@', ''),
+      )
+
+      if (memberIndex === -1) {
+        Notify.create({
+          type: 'negative',
+          message: `Pouzivatel ${nickName} sa v tomto kanali nenachadza!`,
+        })
+        return
+      }
+
+      // vymazeme pouzivatela zo zoznamu clenov
+      this.activeChannel.members.splice(memberIndex, 1)
+
+      Notify.create({
+        type: 'positive',
+        message: `Pouzivatel ${nickName} bol vyhodeny z kanala #${this.activeChannelName}`,
+      })
+    },
+
+    // odobratie clena spravcom zo sukromneho kanala
+    revokeUser(nickName) {
+      if (!this.activeChannel) {
+        return
+      }
+
+      if (!nickName) {
+        Notify.create({
+          type: 'warning',
+          message: 'Zadajte nick používateľa: /revoke @user',
+        })
+        return
+      }
+
+      // /revoke funguje iba v sukromnom kanali
+      if (!this.activeChannel.isPrivate || !this.isCurrentAdmin) {
+        Notify.create({
+          type: 'negative',
+          message: 'Prikaz /revoke moze pouzit iba spravca kanala a iba v sukromnom kanali!',
+        })
+        return
+      }
+      // TBA
+    },
+
+    // pozvanie pouzivatela do aktualneho kanala cez /invite @user
+    inviteUser(nickName) {
+      if (!this.activeChannel) {
+        return
+      }
+
+      if (!nickName) {
+        Notify.create({
+          type: 'warning',
+          message: 'Zadajte nick používateľa: /invite @user',
+        })
+        return
+      }
+
+      // kontrola ci user existuje v zozname registrovanych pouzivatelov
+      const userExists = this.allUsers.includes(nickName)
+      if (!userExists) {
+        Notify.create({
+          type: 'negative',
+          message: `Používateľ ${nickName} neexistuje!`,
+        })
+        return
+      }
+
+      // ak je kanal sukromny, kontrolujeme ci je aktualny pouzivatel spravcom kanalu
+      if (this.activeChannel.isPrivate && !this.isCurrentAdmin) {
+        Notify.create({
+          type: 'negative',
+          message: 'Iba správca môže pridávať členov do súkromného kanála!',
+        })
+        return
+      }
+
+      // kontrola ci uz pouzivatel nahodou nie je clenom kanala
+      const isAlreadyMember = this.activeChannel.members.some((m) => m.name === nickName)
+      if (isAlreadyMember) {
+        Notify.create({
+          type: 'warning',
+          message: `Používateľ ${nickName} už je v tomto kanáli!`,
+        })
+        return
+      }
+
+      // ak vsetko preslo, pridame usera do zoznamu clenov
+      this.activeChannel.members.push({
+        name: nickName,
+        role: 'member',
+      })
+
+      Notify.create({
+        type: 'positive',
+        message: `Používateľ ${nickName} bol úspešne pridaný do kanála #${this.activeChannelName}`,
+      })
     },
   },
 })
