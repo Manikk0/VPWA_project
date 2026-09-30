@@ -1,12 +1,22 @@
 import { defineStore } from 'pinia'
-import { Notify, Dialog } from 'quasar'
+import { Dialog } from 'quasar'
 import { users, channels, messages } from '@/mockData'
+import {
+  getCurrentTime,
+  get_name_from_nick,
+  notifySuccess,
+  notifyError,
+  notifyWarning,
+} from '@/utils/helper_functions'
 
 // jednoduchy store pre spravu kanalov a pouzivatelov
 export const useChatStore = defineStore('chat', {
   state: () => ({
-    // aktualne prihlaseny pouzivatel
-    currentUser: '@moj_nick',
+    // aktualne prihlaseny pouzivatel (predvolene ziadny, nutne sa prihlasit)
+    currentUser: null,
+
+    // zoznam vsetkych registrovanych pouzivatelov s detailami
+    users: users,
 
     // zoznam vsetkych registrovanych pouzivatelov
     allUsers: users.map((u) => u.nick),
@@ -22,6 +32,11 @@ export const useChatStore = defineStore('chat', {
   }),
 
   getters: {
+    // vrati cele meno aktualne prihlaseneho pouzivatela
+    currentUserName: (state) => {
+      return get_name_from_nick(state.currentUser, state.users)
+    },
+
     // vrati zoznam sprav pre aktualne vybrany kanal
     activeMessages: (state) => {
       return state.messages[state.activeChannelName] || []
@@ -38,6 +53,7 @@ export const useChatStore = defineStore('chat', {
 
     // zisti ci je prihlaseny pouzivatel spravcom vybraneho kanala
     isCurrentAdmin: (state) => {
+      if (!state.currentUser) return false
       const channel = state.channels.find((c) => c.name === state.activeChannelName)
       if (!channel) return false
       return channel.createdBy === state.currentUser
@@ -45,6 +61,11 @@ export const useChatStore = defineStore('chat', {
   },
 
   actions: {
+    // funkcia na odhlasenie pouzivatela
+    logout() {
+      this.currentUser = null
+    },
+
     // funkcia na prepnutie vybraneho kanala
     selectChannel(name) {
       this.activeChannelName = name
@@ -56,7 +77,7 @@ export const useChatStore = defineStore('chat', {
       const cleanName = channelName.replace('#', '').trim()
 
       if (!cleanName) {
-        Notify.create({ type: 'warning', message: 'Zadajte platny nazov kanala!' })
+        notifyWarning('Zadajte platny nazov kanala!')
         return
       }
 
@@ -65,10 +86,7 @@ export const useChatStore = defineStore('chat', {
 
       if (existingChannel) {
         // kanal uz existuje, sprava Kanal s menom --- uz existuje
-        Notify.create({
-          type: 'negative',
-          message: `Kanal s menom #${cleanName} uz existuje`,
-        })
+        notifyError(`Kanal s menom #${cleanName} uz existuje`)
       } else {
         // novy kanal
         const newChannel = {
@@ -87,10 +105,7 @@ export const useChatStore = defineStore('chat', {
         }
 
         const typText = isPrivate ? 'sukromny' : 'verejny'
-        Notify.create({
-          type: 'positive',
-          message: `Vytvoreny novy ${typText} kanal #${cleanName}`,
-        })
+        notifySuccess(`Vytvoreny novy ${typText} kanal #${cleanName}`)
       }
     },
 
@@ -103,10 +118,7 @@ export const useChatStore = defineStore('chat', {
 
       // kontrola ci je pouzivatel spravca
       if (channel.createdBy !== this.currentUser) {
-        Notify.create({
-          type: 'negative',
-          message: 'Iba spravca kanala moze zrusit kanal!',
-        })
+        notifyError('Iba spravca kanala moze zrusit kanal!')
         return
       }
 
@@ -172,16 +184,10 @@ export const useChatStore = defineStore('chat', {
         this.messages[this.activeChannelName] = []
       }
 
-      // zistenie aktualneho casu vo formate HH:mm
-      const now = new Date()
-      const hours = String(now.getHours()).padStart(2, '0')
-      const minutes = String(now.getMinutes()).padStart(2, '0')
-      const currentTime = `${hours}:${minutes}`
-
-      // vytvorenie noveho objektu spravy
+      // vytvorenie noveho objektu spravy s aktualnym casom z helper funkcie
       const newMessage = {
         user: this.currentUser,
-        time: currentTime,
+        time: getCurrentTime(),
         text: text.trim(),
       }
 
@@ -193,26 +199,18 @@ export const useChatStore = defineStore('chat', {
     kickUser(nickName) {
       if (!this.activeChannel || !nickName) return
 
-      // najdeme pouzivatela v zozname clenov podla nicku so zavinacom
-      const memberIndex = this.activeChannel.members.findIndex(
-        (m) => m.name === nickName || m.name === nickName.replace('@', ''),
-      )
+      // najdeme pouzivatela v zozname clenov podla nicku
+      const memberIndex = this.activeChannel.members.findIndex((m) => m.name === nickName)
 
       if (memberIndex === -1) {
-        Notify.create({
-          type: 'negative',
-          message: `Pouzivatel ${nickName} sa v tomto kanali nenachadza!`,
-        })
+        notifyError(`Pouzivatel ${nickName} sa v tomto kanali nenachadza!`)
         return
       }
 
       // vymazeme pouzivatela zo zoznamu clenov
       this.activeChannel.members.splice(memberIndex, 1)
 
-      Notify.create({
-        type: 'positive',
-        message: `Pouzivatel ${nickName} bol vyhodeny z kanala #${this.activeChannelName}`,
-      })
+      notifySuccess(`Pouzivatel ${nickName} bol vyhodeny z kanala #${this.activeChannelName}`)
     },
 
     // odobratie clena spravcom zo sukromneho kanala
@@ -222,19 +220,13 @@ export const useChatStore = defineStore('chat', {
       }
 
       if (!nickName) {
-        Notify.create({
-          type: 'warning',
-          message: 'Zadajte nick používateľa: /revoke @user',
-        })
+        notifyWarning('Zadajte nick používateľa: /revoke @user')
         return
       }
 
       // /revoke funguje iba v sukromnom kanali
       if (!this.activeChannel.isPrivate || !this.isCurrentAdmin) {
-        Notify.create({
-          type: 'negative',
-          message: 'Prikaz /revoke moze pouzit iba spravca kanala a iba v sukromnom kanali!',
-        })
+        notifyError('Prikaz /revoke moze pouzit iba spravca kanala a iba v sukromnom kanali!')
         return
       }
       // TBA
@@ -247,39 +239,27 @@ export const useChatStore = defineStore('chat', {
       }
 
       if (!nickName) {
-        Notify.create({
-          type: 'warning',
-          message: 'Zadajte nick používateľa: /invite @user',
-        })
+        notifyWarning('Zadajte nick používateľa: /invite @user')
         return
       }
 
       // kontrola ci user existuje v zozname registrovanych pouzivatelov
       const userExists = this.allUsers.includes(nickName)
       if (!userExists) {
-        Notify.create({
-          type: 'negative',
-          message: `Používateľ ${nickName} neexistuje!`,
-        })
+        notifyError(`Používateľ ${nickName} neexistuje!`)
         return
       }
 
       // ak je kanal sukromny, kontrolujeme ci je aktualny pouzivatel spravcom kanalu
       if (this.activeChannel.isPrivate && !this.isCurrentAdmin) {
-        Notify.create({
-          type: 'negative',
-          message: 'Iba správca môže pridávať členov do súkromného kanála!',
-        })
+        notifyError('Iba správca môže pridávať členov do súkromného kanála!')
         return
       }
 
       // kontrola ci uz pouzivatel nahodou nie je clenom kanala
       const isAlreadyMember = this.activeChannel.members.some((m) => m.name === nickName)
       if (isAlreadyMember) {
-        Notify.create({
-          type: 'warning',
-          message: `Používateľ ${nickName} už je v tomto kanáli!`,
-        })
+        notifyWarning(`Používateľ ${nickName} už je v tomto kanáli!`)
         return
       }
 
@@ -289,10 +269,9 @@ export const useChatStore = defineStore('chat', {
         role: 'member',
       })
 
-      Notify.create({
-        type: 'positive',
-        message: `Používateľ ${nickName} bol úspešne pridaný do kanála #${this.activeChannelName}`,
-      })
+      notifySuccess(
+        `Používateľ ${nickName} bol úspešne pridaný do kanála #${this.activeChannelName}`,
+      )
     },
   },
 })

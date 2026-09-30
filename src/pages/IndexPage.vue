@@ -155,7 +155,8 @@
 <script setup>
 import { ref, inject, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chatStore'
-import { Notify } from 'quasar'
+import { Dialog } from 'quasar'
+import { notifyWarning } from '@/utils/helper_functions'
 
 // nacitanie storu pre chat
 const chatStore = useChatStore()
@@ -169,10 +170,28 @@ const messagesContainer = ref(null)
 // text v prikazovom riadku
 const messageText = ref('')
 
-// funkcia zisti ci je v sprave od ineho pouzivatela spomenuty aktualne prihlaseny pouzivatel
+// funkcia na pozvanie clena cez dialog po kliknuti na tlacidlo
+function promptInviteUser() {
+  Dialog.create({
+    title: 'Pozvať člena',
+    message: 'Zadajte nick používateľa:',
+    prompt: {
+      model: '',
+      type: 'text',
+    },
+    cancel: true,
+    persistent: true,
+  }).onOk((data) => {
+    if (data && data.trim()) {
+      chatStore.inviteUser(data.trim())
+    }
+  })
+}
+
+// funkcia zisti ci je v sprave od ineho pouzivatela spomenuty aktualne prihlaseny pouzivatel so zavinacom
 function isMentioned(msg) {
   if (msg.user === chatStore.currentUser) return false
-  return msg.text.includes(chatStore.currentUser)
+  return msg.text.includes(`@${chatStore.currentUser}`)
 }
 
 // funkcia na posun chatu uplne na spodok pri novej sprave
@@ -201,8 +220,13 @@ function handleSend() {
       chatStore.joinChannel(channelName, isPrivate)
     } else if (command === '/invite') {
       // prikaz: /invite @user
-      const nickName = parts[1] || ''
-      chatStore.inviteUser(nickName)
+      const nickParam = parts[1] || ''
+      if (!nickParam.startsWith('@')) {
+        notifyWarning('V príkaze musíte zadať nickname so zavináčom: /invite @nick')
+        messageText.value = ''
+        return
+      }
+      chatStore.inviteUser(nickParam.slice(1))
     } else if (command === '/quit') {
       // prikaz: /quit
       chatStore.quitChannel()
@@ -211,20 +235,29 @@ function handleSend() {
       chatStore.cancelChannel()
     } else if (command === '/kick') {
       // prikaz: /kick @nick
-      const nickName = parts[1] || ''
-      chatStore.kickUser(nickName)
+      const nickParam = parts[1] || ''
+      if (!nickParam.startsWith('@')) {
+        notifyWarning('V príkaze musíte zadať nickname so zavináčom: /kick @nick')
+        messageText.value = ''
+        return
+      }
+      chatStore.kickUser(nickParam.slice(1))
     } else if (command === '/revoke') {
       // prikaz: /revoke @nick
-      const nickName = parts[1] || ''
-      chatStore.revokeUser(nickName)
+      const nickParam = parts[1] || ''
+      if (!nickParam.startsWith('@')) {
+        notifyWarning('V príkaze musíte zadať nickname so zavináčom: /revoke @nick')
+        messageText.value = ''
+        return
+      }
+      chatStore.revokeUser(nickParam.slice(1))
     } else if (command === '/list') {
       // prikaz: /list
       toggleRightDrawer()
     } else {
-      Notify.create({
-        type: 'warning',
-        message: `Neznamy prikaz: ${command}. Podporovane: /join, /invite, /kick, /revoke, /quit, /cancel, /list`,
-      })
+      notifyWarning(
+        `Neznamy prikaz: ${command}. Podporovane: /join, /invite, /kick, /revoke, /quit, /cancel, /list`,
+      )
     }
   } else {
     // ak text nezacina lomitkom, je to obycajna sprava

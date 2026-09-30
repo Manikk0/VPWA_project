@@ -18,32 +18,52 @@
           <!-- pole pre krstne meno -->
           <div>
             <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Meno</div>
-            <q-input bg-color="white" outlined dense placeholder="Zadajte meno" />
+            <q-input
+              v-model="firstName"
+              bg-color="white"
+              outlined
+              dense
+              placeholder="Zadajte meno"
+            />
           </div>
 
           <!-- pole pre priezvisko -->
           <div>
             <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Priezvisko</div>
-            <q-input outlined bg-color="white" dense placeholder="Zadajte priezvisko" />
+            <q-input
+              v-model="lastName"
+              outlined
+              bg-color="white"
+              dense
+              placeholder="Zadajte priezvisko"
+            />
           </div>
 
           <!-- pole pre nickname -->
           <div>
             <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Nickname</div>
-            <q-input bg-color="white" outlined dense placeholder="Zadajte prezyvku" />
+            <q-input
+              v-model="nickname"
+              bg-color="white"
+              outlined
+              dense
+              placeholder="Zadajte prezyvku"
+            />
           </div>
         </template>
 
-        <!-- pole pre email -->
+        <!-- pole pre email alebo nick -->
         <div>
-          <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Email</div>
+          <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">
+            {{ isRegisterMode ? 'Email' : 'Email alebo Nickname' }}
+          </div>
           <q-input
-            v-model="email"
-            type="email"
+            v-model="loginIdentifier"
+            :type="isRegisterMode ? 'email' : 'text'"
             bg-color="white"
             outlined
             dense
-            placeholder="Zadajte email"
+            :placeholder="isRegisterMode ? 'Zadajte email' : 'Zadajte email alebo nick'"
           />
         </div>
 
@@ -93,7 +113,7 @@ import { useRouter } from 'vue-router'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
 import { users } from '@/mockData'
-import { Notify } from 'quasar'
+import { notifySuccess, notifyError, notifyWarning } from '@/utils/helper_functions'
 
 const router = useRouter()
 const chatStore = useChatStore()
@@ -101,45 +121,89 @@ const chatStore = useChatStore()
 const isRegisterMode = ref(false)
 
 // hodnoty z formulara
-const email = ref('')
+const firstName = ref('')
+const lastName = ref('')
+const nickname = ref('')
+const loginIdentifier = ref('')
 const password = ref('')
 
-// funkcia na spracovanie prihlasenia
+// funkcia na spracovanie prihlasenia / registracie
 function handleSubmit() {
   if (isRegisterMode.value) {
+    // kontrola ci pouzivatel vyplnil vsetky polia
+    if (
+      !firstName.value ||
+      !lastName.value ||
+      !nickname.value ||
+      !loginIdentifier.value ||
+      !password.value
+    ) {
+      notifyWarning('Vyplňte prosím všetky polia!')
+      return
+    }
+
+    const cleanNick = nickname.value.trim().toLowerCase()
+    const cleanEmail = loginIdentifier.value.trim().toLowerCase()
+
+    // kontrola ci uz nahodou pouzivatel s takym nickom existuje
+    if (chatStore.users.find((u) => u.nick.toLowerCase() === cleanNick)) {
+      notifyError('Používateľ s týmto nickom už existuje!')
+      return
+    }
+
+    // kontrola ci uz nahodou pouzivatel s takym emailom existuje
+    if (chatStore.users.find((u) => u.email.toLowerCase() === cleanEmail)) {
+      notifyError('Používateľ s týmto emailom už existuje!')
+      return
+    }
+
+    // vytvorenie objektu noveho pouzivatela
+    const newUser = {
+      name: `${firstName.value.trim()} ${lastName.value.trim()}`,
+      nick: nickname.value.trim(),
+      email: loginIdentifier.value.trim(),
+      password: password.value,
+    }
+
+    // pridanie noveho pouzivatela do zoznamov v store
+    chatStore.users.push(newUser)
+    chatStore.allUsers.push(newUser.nick)
+
+    // nastavenie prihlaseneho pouzivatela a presmerovanie na hlavnu stranku
+    chatStore.currentUser = newUser.nick
+
+    notifySuccess('Registrácia bola úspešná!')
+
     router.push('/')
     return
   }
 
-  // kontrola ci zadal email a heslo
-  if (!email.value || !password.value) {
-    Notify.create({
-      type: 'warning',
-      message: 'Zadajte email aj heslo!',
-    })
+  // spracovanie prihlasenia existujuceho pouzivatela
+  // kontrola ci zadal prihlasovacie udaje a heslo
+  if (!loginIdentifier.value || !password.value) {
+    notifyWarning('Zadajte email/nick aj heslo!')
     return
   }
 
-  // zistenie ci pouzivatel s takym emailom existuje
-  const user = users.find((u) => u.email === email.value)
+  const input = loginIdentifier.value.trim().toLowerCase()
+
+  // zistenie ci pouzivatel s takym emailom alebo nickom existuje
+  const user = (chatStore.users || users).find(
+    (u) => u.email.toLowerCase() === input || u.nick.toLowerCase() === input,
+  )
+
   if (!user) {
-    Notify.create({
-      type: 'negative',
-      message: 'Používateľ s týmto emailom neexistuje!',
-    })
+    notifyError('Používateľ s týmto emailom alebo nickom neexistuje!')
     return
   }
 
   // overenie spravnosti hesla
   if (user.password !== password.value) {
-    Notify.create({
-      type: 'negative',
-      message: 'Nesprávne heslo!',
-    })
+    notifyError('Nesprávne heslo!')
     return
   }
 
-  // ak je vsetko v poriadku tak ulozime pozivatela a presmerujeme do aplikacie
+  // ak je vsetko v poriadku tak ulozime pouzivatela a presmerujeme do aplikacie
   chatStore.currentUser = user.nick
   router.push('/')
 }

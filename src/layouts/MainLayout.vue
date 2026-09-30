@@ -53,16 +53,16 @@
             <q-tooltip>Profil pouzivatela</q-tooltip>
           </q-btn>
 
-          <!-- blok s menom pouzivatela -->
+          <!-- blok s menom prihlaseneho pouzivatela -->
           <div class="column justify-center text-left leading-tight q-mr-xs">
-            <span class="text-weight-bold text-caption">Meno Pouzivatela</span>
-            <span class="text-caption text-dry-sage" style="font-size: 11px">{{
-              chatStore.currentUser
-            }}</span>
+            <span class="text-weight-bold text-caption">{{ chatStore.currentUserName }}</span>
+            <span class="text-caption text-dry-sage" style="font-size: 11px"
+              >@{{ chatStore.currentUser }}</span
+            >
           </div>
 
           <!-- tlacidlo na odhlasenie -->
-          <q-btn flat dense round icon="logout" to="/login" size="md">
+          <q-btn flat dense round icon="logout" @click="handleLogout" size="md">
             <q-tooltip>Odhlásiť sa</q-tooltip>
           </q-btn>
         </div>
@@ -155,12 +155,21 @@
 
 <script setup>
 import { ref, provide } from 'vue'
+import { useRouter } from 'vue-router'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
 import { Dialog } from 'quasar'
 
+const router = useRouter()
+
 // nacitanie storu pre chat
 const chatStore = useChatStore()
+
+// funkcia na odhlasenie pouzivatela
+function handleLogout() {
+  chatStore.logout()
+  router.push('/login')
+}
 
 const leftDrawerOpen = ref(true)
 const rightDrawerOpen = ref(false)

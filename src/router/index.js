@@ -7,6 +7,7 @@ import {
 } from 'vue-router'
 
 import routes from './routes.js'
+import { useChatStore } from '@/stores/chatStore'
 
 /*
  * If not building with SSR mode, you can
@@ -17,7 +18,7 @@ import routes from './routes.js'
  * with the Router instance.
  */
 
-export default defineRouter((/* { store, ssrContext } */) => {
+export default defineRouter(({ store }) => {
   const createHistory = import.meta.env.QUASAR_SERVER
     ? createMemoryHistory
     : import.meta.env.QUASAR_VUE_ROUTER_MODE === 'history'
@@ -32,6 +33,21 @@ export default defineRouter((/* { store, ssrContext } */) => {
     // quasar.conf.js -> build -> vueRouterMode
     // quasar.conf.js -> build -> publicPath
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE),
+  })
+
+  // navigacna kontrola pre overenie prihlasenia pouzivatela
+  Router.beforeEach((to, from, next) => {
+    const chatStore = useChatStore(store)
+
+    // ak pouzivatel nie je prihlaseny a nejde na prihlasovaciu stranku, presmerujeme na /login
+    if (!chatStore.currentUser && to.path !== '/login') {
+      next('/login')
+    } else if (chatStore.currentUser && to.path === '/login') {
+      // ak je pouzivatel uz prihlaseny a ide na /login, presmerujeme na hlavnu stranku
+      next('/')
+    } else {
+      next()
+    }
   })
 
   return Router
