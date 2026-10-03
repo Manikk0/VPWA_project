@@ -4,9 +4,12 @@ import { users, channels, messages } from '@/mockData'
 import {
   getCurrentTime,
   get_name_from_nick,
+  getUserStatus,
   notifySuccess,
   notifyError,
   notifyWarning,
+  notifyNewMessage,
+  notifyInfo,
 } from '@/utils/helper_functions'
 
 // jednoduchy store pre spravu kanalov a pouzivatelov
@@ -29,6 +32,9 @@ export const useChatStore = defineStore('chat', {
 
     // ulozisko sprav pre jednotlive kanaly
     messages: messages,
+
+    // pocet sprav v kazdom kanali v case, ked sa pouzivatel prepol do offline
+    offlineMessageCounts: {},
   }),
 
   getters: {
@@ -37,18 +43,42 @@ export const useChatStore = defineStore('chat', {
       return get_name_from_nick(state.currentUser, state.users)
     },
 
-    // vrati zoznam sprav pre aktualne vybrany kanal
-    activeMessages: (state) => {
-      return state.messages[state.activeChannelName] || []
+    // vrati stav aktualne prihlaseneho pouzivatela (Online, DND, Offline)
+    currentUserStatus: (state) => {
+      return getUserStatus(state.currentUser, state.users)
     },
 
-    // vrati objekt aktualne vybraneho kanala
-    activeChannel: (state) => {
-      let found = state.channels.find((c) => c.name === state.activeChannelName)
-      if (!found && state.channels.length > 0) {
-        found = state.channels[0]
+    // vrati zoznam sprav pre aktualne vybrany kanal
+    activeMessages() {
+      const allMessages = this.messages[this.activeChannelName] || []
+
+      // ak je pouzivatel offline, zobrazime iba spravy, ktore prisli pred prepnutim do offline
+      if (this.currentUserStatus === 'Offline') {
+        const count = this.offlineMessageCounts[this.activeChannelName]
+        if (count !== undefined) {
+          return allMessages.slice(0, count)
+        }
       }
-      return found
+
+      return allMessages
+    },
+
+    // vrati iba kanaly, v ktorych je prihlaseny pouzivatel clenom
+    myChannels: (state) => {
+      const result = []
+      for (const channel of state.channels) {
+        // hladame ci je pouzivatel v zozname clenov kanala
+        const isMember = channel.members.some((m) => m.name === state.currentUser)
+        if (isMember) {
+          result.push(channel)
+        }
+      }
+      return result
+    },
+
+    // vrati objekt aktualne vybraneho kanala (iba ak je v nom pouzivatel clenom)
+    activeChannel() {
+      return this.myChannels.find((c) => c.name === this.activeChannelName)
     },
 
     // zisti ci je prihlaseny pouzivatel spravcom vybraneho kanala
@@ -66,9 +96,76 @@ export const useChatStore = defineStore('chat', {
       this.currentUser = null
     },
 
+    // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)
+    setStatus(newStatus) {
+      const user = this.users.find((u) => u.nick === this.currentUser)
+      if (!user) return
+
+      // ak pouzivatel klikol na stav, ktory uz ma, nic nemenime
+      if (user.status === newStatus) return
+
+      const wasOffline = user.status === 'Offline'
+
+      // pri prepnuti do offline si zapamatame, kolko sprav bolo v kazdom kanali
+      if (newStatus === 'Offline' && !wasOffline) {
+        this.offlineMessageCounts = {}
+        for (const channel of this.myChannels) {
+          const channelMessages = this.messages[channel.name] || []
+          this.offlineMessageCounts[channel.name] = channelMessages.length
+        }
+      }
+
+      user.status = newStatus
+
+      // po navrate z offline sa kanaly aktualizuju
+      if (wasOffline && newStatus !== 'Offline') {
+        this.offlineMessageCounts = {}
+      }
+
+      // kratka informacna notifikacia podla noveho stavu
+      if (newStatus === 'DND') {
+        notifyInfo('Nerušiť – upozornenia na nové správy sú vypnuté')
+      } else if (newStatus === 'Offline') {
+        notifyInfo('Ste offline – nové správy sa nezobrazujú')
+      } else if (wasOffline) {
+        notifyInfo('Ste opäť online, kanály boli aktualizované')
+      } else {
+        notifyInfo('Ste online – upozornenia na nové správy sú zapnuté')
+      }
+    },
+
+    // prijatie novej spravy od ineho pouzivatela
+    receiveMessage(channelName, sender, text) {
+      if (!this.messages[channelName]) {
+        this.messages[channelName] = []
+      }
+
+      // sprava sa ulozi vzdy, aj ked je pouzivatel offline
+      this.messages[channelName].push({
+        user: sender,
+        time: getCurrentTime(),
+        text: text,
+      })
+
+      // upozornenie zobrazime iba ak je pouzivatel online
+      // a sprava prisla do ineho kanala, nez ktory ma prave otvoreny
+      if (this.currentUserStatus === 'Online' && channelName !== this.activeChannelName) {
+        notifyNewMessage(channelName, sender, text)
+      }
+    },
+
     // funkcia na prepnutie vybraneho kanala
     selectChannel(name) {
       this.activeChannelName = name
+    },
+
+    // prepne na prvy kanal pouzivatela, ak ziadny nema tak nastavi prazdny nazov
+    selectFirstChannel() {
+      if (this.myChannels.length > 0) {
+        this.activeChannelName = this.myChannels[0].name
+      } else {
+        this.activeChannelName = ''
+      }
     },
 
     // vytvorenie alebo pridanie sa do kanala cez /join
@@ -122,19 +219,24 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      // odstranenie kanala zo zoznamu
-      this.channels = this.channels.filter((c) => c.name !== targetName)
-      // ak este zostali nejake kanaly prepneme na prvy z nich
-      if (this.channels.length > 0) {
-        this.activeChannelName = this.channels[0].name
-      } else {
-        this.activeChannelName = ''
-      }
+      // spravca rusi kanal, takze zanikne pre vsetkych clenov
+      this.deleteChannel(targetName)
+    },
+
+    // uplne zmazanie kanala aj s jeho spravami (kanal zanikne pre vsetkych)
+    deleteChannel(channelName) {
+      // odstranenie kanala zo zoznamu vsetkych kanalov
+      this.channels = this.channels.filter((c) => c.name !== channelName)
+      // odstranenie sprav kanala
+      delete this.messages[channelName]
+
+      // prepneme na iny kanal pouzivatela
+      this.selectFirstChannel()
 
       // popup sprava Kanal zanikol
       Dialog.create({
         title: 'Kanal zanikol',
-        message: 'Kanal zanikol',
+        message: `Kanal #${channelName} zanikol`,
         color: 'negative',
       })
     },
@@ -146,38 +248,35 @@ export const useChatStore = defineStore('chat', {
 
       if (!channel) return
 
-      // kanal zmizne zo zoznamu vlavo pre daneho pouzivatela
-      this.channels = this.channels.filter((c) => c.name !== targetName)
-
-      if (this.channels.length > 0) {
-        this.activeChannelName = this.channels[0].name
-      } else {
-        this.activeChannelName = ''
-      }
-
-      // ak je pouzivatel spravca kanala, kanal zanika
+      // ak je pouzivatel spravca kanala, kanal zanika pre vsetkych
       if (channel.createdBy === this.currentUser) {
-        Dialog.create({
-          title: 'Kanal zanikol',
-          message: 'Kanal zanikol',
-          color: 'negative',
-        })
-      } else {
-        // ak pouzivatel nie je spravca, sprava Opustil si kanal
-        channel.members = channel.members.filter((m) => m.name !== this.currentUser)
-
-        Dialog.create({
-          title: 'Opustil si kanal',
-          message: 'Opustil si kanal',
-          color: 'warning',
-        })
+        this.deleteChannel(targetName)
+        return
       }
+
+      // inak odoberieme iba aktualneho pouzivatela zo zoznamu clenov
+      channel.members = channel.members.filter((m) => m.name !== this.currentUser)
+
+      // prepneme na iny kanal pouzivatela
+      this.selectFirstChannel()
+
+      Dialog.create({
+        title: 'Opustil si kanal',
+        message: `Opustil si kanal #${targetName}`,
+        color: 'warning',
+      })
     },
 
     // funkcia na odoslanie spravy do aktualneho kanala
     sendMessage(text) {
-      // ak nie je vybrany ziadny kanal alebo je text prazdny, nic nespravime
-      if (!this.activeChannelName || !text || !text.trim()) return
+      // ak nie je vybrany ziadny kanal (kde je pouzivatel clenom) alebo je text prazdny, nic nespravime
+      if (!this.activeChannel || !text || !text.trim()) return
+
+      // v offline stave sa spravy neodosielaju
+      if (this.currentUserStatus === 'Offline') {
+        notifyWarning('Ste offline, správu nie je možné odoslať')
+        return
+      }
 
       // ak nahodou pre dany kanal este neexistuje pole sprav v dictionary, vytvorime ho
       if (!this.messages[this.activeChannelName]) {
@@ -229,7 +328,26 @@ export const useChatStore = defineStore('chat', {
         notifyError('Prikaz /revoke moze pouzit iba spravca kanala a iba v sukromnom kanali!')
         return
       }
-      // TBA
+
+      // spravca nemoze odobrat sam seba
+      if (nickName === this.currentUser) {
+        notifyWarning('Nemôžete odobrať sám seba. Na zrušenie kanála použite /quit')
+        return
+      }
+
+      // najdeme pouzivatela v zozname clenov kanala
+      const memberIndex = this.activeChannel.members.findIndex((m) => m.name === nickName)
+
+      // ak pouzivatel nie je clenom kanala, vypiseme chybu
+      if (memberIndex === -1) {
+        notifyError(`Používateľ ${nickName} nie je členom kanála #${this.activeChannelName}!`)
+        return
+      }
+
+      // odstranime pouzivatela zo zoznamu clenov
+      this.activeChannel.members.splice(memberIndex, 1)
+
+      notifySuccess(`Používateľ ${nickName} bol odobratý z kanála #${this.activeChannelName}`)
     },
 
     // pozvanie pouzivatela do aktualneho kanala cez /invite @user

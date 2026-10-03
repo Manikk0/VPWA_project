@@ -1,9 +1,9 @@
 <template>
   <!-- hlavna stranka s chatovacim oknom -->
   <q-page class="column justify-between bg-dust-grey">
-    <!-- ak pouzivatel nie je v ziadnom kanali, zobrazime prazdny stav -->
+    <!-- ak pouzivatel nema vybrany ziadny svoj kanal, zobrazime prazdny stav -->
     <div
-      v-if="!chatStore.activeChannelName || chatStore.channels.length === 0"
+      v-if="!chatStore.activeChannel"
       class="col flex flex-center text-center q-pa-md text-pine-teal"
     >
       <div>
@@ -140,20 +140,32 @@
           dense
           outlined
           bg-color="white"
-          placeholder="Napis spravu alebo prikaz (napr. /join nazov, /invite @nick, /kick @nick, /revoke @nick, /quit, /cancel, /list)..."
+          :disable="chatStore.currentUserStatus === 'Offline'"
+          :placeholder="
+            chatStore.currentUserStatus === 'Offline'
+              ? 'Ste offline, správy nie je možné odosielať'
+              : 'Napis spravu alebo prikaz (napr. /join nazov, /invite @nick, /kick @nick, /revoke @nick, /quit, /cancel, /list)...'
+          "
           class="col"
           @keyup.enter="handleSend"
         />
 
         <!-- tlacidlo na odoslanie -->
-        <q-btn round color="fern" icon="send" text-color="dust-grey" @click="handleSend" />
+        <q-btn
+          round
+          color="fern"
+          icon="send"
+          text-color="dust-grey"
+          :disable="chatStore.currentUserStatus === 'Offline'"
+          @click="handleSend"
+        />
       </div>
     </div>
   </q-page>
 </template>
 
 <script setup>
-import { ref, inject, nextTick } from 'vue'
+import { ref, inject, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chatStore'
 import { Dialog } from 'quasar'
 import { notifyWarning } from '@/utils/helper_functions'
@@ -202,6 +214,14 @@ function scrollToBottom() {
     }
   })
 }
+
+// ked pribudne nova sprava (napr. od ineho pouzivatela), posunieme chat na spodok
+watch(
+  () => chatStore.activeMessages.length,
+  () => {
+    scrollToBottom()
+  },
+)
 
 // funkcia na spracovanie odoslania spravy alebo prikazu
 function handleSend() {

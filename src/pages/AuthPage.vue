@@ -163,6 +163,8 @@ function handleSubmit() {
       nick: nickname.value.trim(),
       email: loginIdentifier.value.trim(),
       password: password.value,
+      // novy pouzivatel je predvolene online
+      status: 'Online',
     }
 
     // pridanie noveho pouzivatela do zoznamov v store
@@ -171,6 +173,8 @@ function handleSubmit() {
 
     // nastavenie prihlaseneho pouzivatela a presmerovanie na hlavnu stranku
     chatStore.currentUser = newUser.nick
+    // novy pouzivatel este nema ziadne kanaly, takze sa nastavi prazdny kanal
+    chatStore.selectFirstChannel()
 
     notifySuccess('Registrácia bola úspešná!')
 
@@ -205,6 +209,8 @@ function handleSubmit() {
 
   // ak je vsetko v poriadku tak ulozime pouzivatela a presmerujeme do aplikacie
   chatStore.currentUser = user.nick
+  // po prihlaseni otvorime prvy kanal, v ktorom je pouzivatel clenom
+  chatStore.selectFirstChannel()
   router.push('/')
 }
 </script>

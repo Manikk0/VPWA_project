@@ -15,9 +15,9 @@
           <!-- tlacidlo na zmenu stavu s farebnou bodkou a nazvom -->
           <q-btn flat no-caps dense class="rounded-borders q-px-sm bg-hunter-green">
             <!-- farebna bodka reprezentujuca aktualny stav pouzivatela -->
-            <q-badge rounded :color="statusColors[userStatus]" class="q-mr-xs" />
+            <q-badge rounded :color="statusColors[chatStore.currentUserStatus]" class="q-mr-xs" />
             <!-- nazov aktualneho stavu pouzivatela -->
-            <span class="text-caption text-weight-medium">{{ userStatus }}</span>
+            <span class="text-caption text-weight-medium">{{ chatStore.currentUserStatus }}</span>
             <!-- sipka znazornujuca moznost rozkliknutia -->
             <q-icon name="expand_more" size="xs" class="q-ml-xs text-dry-sage" />
 
@@ -30,16 +30,16 @@
                   clickable
                   v-ripple
                   class="rounded-borders"
-                  :active="userStatus === st.label"
+                  :active="chatStore.currentUserStatus === st.label"
                   active-class="bg-hunter-green text-dust-grey"
-                  @click="userStatus = st.label"
+                  @click="chatStore.setStatus(st.label)"
                 >
                   <q-item-section avatar style="min-width: 28px">
                     <q-badge rounded :color="st.color" />
                   </q-item-section>
                   <q-item-section>{{ st.label }}</q-item-section>
                   <!-- znacka fajky pri stave -->
-                  <q-item-section v-if="userStatus === st.label" side>
+                  <q-item-section v-if="chatStore.currentUserStatus === st.label" side>
                     <q-icon name="check" size="xs" color="dry-sage" />
                   </q-item-section>
                 </q-item>
@@ -82,16 +82,16 @@
             size="sm"
             icon="add"
             class="text-dry-sage"
-            @click="promptAddChannel"
+            @click="openCreateDialog"
           >
             <q-tooltip>Vytvoriť kanál</q-tooltip>
           </q-btn>
         </div>
 
-        <!-- zoznam kanalov zo storu -->
+        <!-- zoznam kanalov, v ktorych je pouzivatel clenom -->
         <q-list dense>
           <q-item
-            v-for="ch in chatStore.channels"
+            v-for="ch in chatStore.myChannels"
             :key="ch.name"
             clickable
             v-ripple
@@ -128,6 +128,11 @@
           clickable
           v-ripple
         >
+          <!-- farebna bodka so stavom clena (Online, DND, Offline) -->
+          <q-item-section avatar style="min-width: 24px">
+            <q-badge rounded :color="statusColors[getUserStatus(m.name, chatStore.users)]" />
+            <q-tooltip>{{ getUserStatus(m.name, chatStore.users) }}</q-tooltip>
+          </q-item-section>
           <q-item-section>
             <div class="row items-center justify-between">
               <span>{{ m.name }}</span>
@@ -150,15 +155,53 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <!-- dialog na vytvorenie noveho kanala -->
+    <q-dialog v-model="showCreateDialog">
+      <q-card style="min-width: 320px" class="bg-dust-grey">
+        <!-- nadpis dialogu -->
+        <q-card-section class="bg-pine-teal text-dust-grey">
+          <div class="text-h6">Vytvoriť kanál</div>
+        </q-card-section>
+
+        <q-card-section>
+          <!-- pole pre nazov kanala -->
+          <q-input
+            v-model="newChannelName"
+            label="Názov kanála"
+            dense
+            outlined
+            bg-color="white"
+            autofocus
+            @keyup.enter="createChannel"
+          />
+
+          <!-- vyber typu kanala -->
+          <div class="text-caption text-weight-bold text-pine-teal q-mt-md">Typ kanála</div>
+          <q-option-group
+            v-model="newChannelType"
+            :options="channelTypeOptions"
+            color="fern"
+            inline
+          />
+        </q-card-section>
+
+        <!-- tlacidla dialogu -->
+        <q-card-actions align="right">
+          <q-btn flat label="Zrušiť" class="text-pine-teal" v-close-popup />
+          <q-btn unelevated label="Vytvoriť" color="fern" @click="createChannel" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-layout>
 </template>
 
 <script setup>
-import { ref, provide } from 'vue'
+import { ref, provide, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
-import { Dialog } from 'quasar'
+import { getUserStatus } from '@/utils/helper_functions'
 
 const router = useRouter()
 
@@ -179,7 +222,7 @@ provide('toggleRightDrawer', () => {
   rightDrawerOpen.value = !rightDrawerOpen.value
 })
 
-const userStatus = ref('Online')
+// farby bodiek pre jednotlive stavy pouzivatela
 const statusColors = { Online: 'fern', DND: 'negative', Offline: 'grey-6' }
 const statuses = [
   { label: 'Online', color: 'fern' },
@@ -187,21 +230,83 @@ const statuses = [
   { label: 'Offline', color: 'grey-6' },
 ]
 
-// funkcia pre priradenie/vytvorenie kanala cez dialog po kliknuti na '+'
-function promptAddChannel() {
-  Dialog.create({
-    title: 'Vytvoriť kanál',
-    message: 'Napište názov nového kanála:',
-    prompt: {
-      model: '',
-      type: 'text',
-    },
-    cancel: true,
-    persistent: true,
-  }).onOk((data) => {
-    if (data && data.trim()) {
-      chatStore.joinChannel(data.trim(), false)
-    }
-  })
+// --- dialog na vytvorenie kanala ---
+
+// ci je dialog otvoreny
+const showCreateDialog = ref(false)
+// nazov noveho kanala z dialogu
+const newChannelName = ref('')
+// typ noveho kanala: 'public' alebo 'private'
+const newChannelType = ref('public')
+// moznosti pre vyber typu kanala
+const channelTypeOptions = [
+  { label: 'Verejný', value: 'public' },
+  { label: 'Súkromný', value: 'private' },
+]
+
+// otvorenie dialogu po kliknuti na '+' (polia sa vycistia)
+function openCreateDialog() {
+  newChannelName.value = ''
+  newChannelType.value = 'public'
+  showCreateDialog.value = true
 }
+
+// vytvorenie kanala podla udajov z dialogu
+function createChannel() {
+  if (!newChannelName.value.trim()) return
+
+  const isPrivate = newChannelType.value === 'private'
+  chatStore.joinChannel(newChannelName.value.trim(), isPrivate)
+
+  showCreateDialog.value = false
+}
+
+// --- simulacia prichadzajucich sprav ---
+
+// ukazkove texty, ktore "posielaju" ostatni pouzivatelia
+const fakeTexts = [
+  'Ahoj, ako sa mate?',
+  'Kto ide dnes na cvicenie?',
+  'Pozrel som si to, vyzera to dobre.',
+  'Mam otazku k zadaniu.',
+  'Diky za info!',
+]
+
+// odkaz na casovac, aby sme ho vedeli pri odchode zastavit
+let simulationTimer = null
+
+// funkcia vyberie nahodny kanal a nahodneho clena, ktory don posle spravu
+function simulateIncomingMessage() {
+  if (chatStore.myChannels.length === 0) return
+
+  // nahodny kanal z kanalov pouzivatela
+  const channelIndex = Math.floor(Math.random() * chatStore.myChannels.length)
+  const channel = chatStore.myChannels[channelIndex]
+
+  // mozni odosielatelia: clenovia kanala okrem mna, ktori nie su offline
+  const senders = []
+  for (const member of channel.members) {
+    const status = getUserStatus(member.name, chatStore.users)
+    if (member.name !== chatStore.currentUser && status !== 'Offline') {
+      senders.push(member.name)
+    }
+  }
+  if (senders.length === 0) return
+
+  // nahodny odosielatel a nahodny text
+  const sender = senders[Math.floor(Math.random() * senders.length)]
+  const text = fakeTexts[Math.floor(Math.random() * fakeTexts.length)]
+
+  chatStore.receiveMessage(channel.name, sender, text)
+}
+
+// po nacitani layoutu spustime simulaciu kazdych 20 sekund
+onMounted(() => {
+  simulationTimer = setInterval(simulateIncomingMessage, 20000)
+})
+
+// pri odchode z layoutu (napr. odhlasenie) casovac zastavime
+onUnmounted(() => {
+  clearInterval(simulationTimer)
+})
 </script>
