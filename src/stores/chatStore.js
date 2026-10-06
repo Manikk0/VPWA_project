@@ -35,6 +35,21 @@ export const useChatStore = defineStore('chat', {
 
     // pocet sprav v kazdom kanali v case, ked sa pouzivatel prepol do offline
     offlineMessageCounts: {},
+
+    // pocet zobrazenych sprav pre kazdy kanal - defaultne 10 najnovsich
+    visibleMessageCounts: {},
+
+    // slovnik pre vlastne poradie kanalov pouzivatelov { nick: ['general', 'test1'] }
+    userChannelOrders: {},
+
+    // slovnik pre zvyraznene (nove) kanaly pouzivatelov { nick: ['test1'] }
+    highlightedChannels: {},
+
+    // slovnik pre pisucich pouzivatelov v kanaloch { general: ['ed', 'mara'] }
+    typingUsers: {},
+
+    // slovnik pre rozpisane texty sprav pouzivatelov { general: { ed: 'Ahoj...' } }
+    typingDrafts: {},
   }),
 
   getters: {
@@ -43,24 +58,48 @@ export const useChatStore = defineStore('chat', {
       return get_name_from_nick(state.currentUser, state.users)
     },
 
+    // vrati zoznam pisucich pouzivatelov pre aktualne vybrany kanal
+    currentTypingUsers(state) {
+      return state.typingUsers[state.activeChannelName] || []
+    },
+
     // vrati stav aktualne prihlaseneho pouzivatela (Online, DND, Offline)
     currentUserStatus: (state) => {
       return getUserStatus(state.currentUser, state.users)
     },
 
-    // vrati zoznam sprav pre aktualne vybrany kanal
+    // vrati sformatovany text pisucich pouzivatelov pre aktualne vybrany kanal
+    activeTypingText() {
+      const usersList = this.typingUsers[this.activeChannelName] || []
+      if (usersList.length === 0) return ''
+
+      if (usersList.length === 1) {
+        return `${usersList[0]} práve píše správu...`
+      } else if (usersList.length === 2) {
+        return `${usersList[0]}, ${usersList[1]} práve píšu správu...`
+      } else {
+        return 'Viacerí používatelia práve píšu správu...'
+      }
+    },
+
+    // vrati zoznam sprav pre aktualne vybrany kanal (podla poctu nacitanych sprav)
     activeMessages() {
       const allMessages = this.messages[this.activeChannelName] || []
+      const visibleCount = this.visibleMessageCounts[this.activeChannelName] || 10
+
+      // vezmeme poslednych `visibleCount` sprav z celkovej historie
+      const startIndex = Math.max(0, allMessages.length - visibleCount)
+      let visible = allMessages.slice(startIndex)
 
       // ak je pouzivatel offline, zobrazime iba spravy, ktore prisli pred prepnutim do offline
       if (this.currentUserStatus === 'Offline') {
         const count = this.offlineMessageCounts[this.activeChannelName]
         if (count !== undefined) {
-          return allMessages.slice(0, count)
+          visible = visible.slice(0, count)
         }
       }
 
-      return allMessages
+      return visible
     },
 
     // vrati iba kanaly, v ktorych je prihlaseny pouzivatel clenom
@@ -73,6 +112,22 @@ export const useChatStore = defineStore('chat', {
           result.push(channel)
         }
       }
+
+      // ak ma pouzivatel ulozene vlastne poradie kanalov, zoradime ich podla neho
+      const userOrder = state.userChannelOrders[state.currentUser]
+      if (userOrder && userOrder.length > 0) {
+        result.sort((a, b) => {
+          const indexA = userOrder.indexOf(a.name)
+          const indexB = userOrder.indexOf(b.name)
+
+          // ak kanal v poradi chyba, dame ho az na koniec
+          const posA = indexA !== -1 ? indexA : 999
+          const posB = indexB !== -1 ? indexB : 999
+
+          return posA - posB
+        })
+      }
+
       return result
     },
 
@@ -134,6 +189,34 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
+    // nastavenie stavu pisania a rozpisanej spravy pre pouzivatela v kanali
+    setTyping(channelName, nick, isTyping, draftText = '') {
+      if (!this.typingUsers[channelName]) {
+        this.typingUsers[channelName] = []
+      }
+      if (!this.typingDrafts[channelName]) {
+        this.typingDrafts[channelName] = {}
+      }
+
+      if (isTyping) {
+        if (!this.typingUsers[channelName].includes(nick)) {
+          this.typingUsers[channelName].push(nick)
+        }
+        this.typingDrafts[channelName][nick] = draftText
+      } else {
+        this.typingUsers[channelName] = this.typingUsers[channelName].filter((n) => n !== nick)
+        delete this.typingDrafts[channelName][nick]
+      }
+    },
+
+    // vrati rozpisany text spravy daneho pouzivatela v aktualnom kanali
+    getTypingDraft(nick) {
+      if (!this.activeChannelName || !this.typingDrafts[this.activeChannelName]) {
+        return ''
+      }
+      return this.typingDrafts[this.activeChannelName][nick] || ''
+    },
+
     // prijatie novej spravy od ineho pouzivatela
     receiveMessage(channelName, sender, text) {
       if (!this.messages[channelName]) {
@@ -147,6 +230,14 @@ export const useChatStore = defineStore('chat', {
         text: text,
       })
 
+      // ked pouzivatel posle spravu, zrusime jeho stav pisania
+      this.setTyping(channelName, sender, false)
+
+      // ak mame nastaveny pocet viditelnych sprav, zvysime ho o 1 aby sa nova sprava zobrazila
+      if (this.visibleMessageCounts[channelName] !== undefined) {
+        this.visibleMessageCounts[channelName]++
+      }
+
       // upozornenie zobrazime iba ak je pouzivatel online
       // a sprava prisla do ineho kanala, nez ktory ma prave otvoreny
       if (this.currentUserStatus === 'Online' && channelName !== this.activeChannelName) {
@@ -154,15 +245,60 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
+    // funkcia na nacitanie dalsej davky starsich sprav pre aktualny kanal
+    loadOlderMessages() {
+      if (!this.activeChannelName) return false
+
+      const allMessages = this.messages[this.activeChannelName] || []
+      const currentCount = this.visibleMessageCounts[this.activeChannelName] || 10
+
+      // ak uz mame nacitane vsetky spravy v kanali, vratime false kedze ziadne dalsie nie su
+      if (currentCount >= allMessages.length) {
+        return false
+      }
+
+      // pridame dalsich 10 sprav do viditelneho poctu pre tento kanal
+      this.visibleMessageCounts[this.activeChannelName] = currentCount + 10
+      return true
+    },
+
     // funkcia na prepnutie vybraneho kanala
     selectChannel(name) {
       this.activeChannelName = name
+
+      // po rozkliknuti kanala zrusime jeho zvyraznenie pre aktualneho pouzivatela
+      if (this.currentUser && this.highlightedChannels[this.currentUser]) {
+        this.highlightedChannels[this.currentUser] = this.highlightedChannels[
+          this.currentUser
+        ].filter((ch) => ch !== name)
+      }
     },
 
-    // prepne na prvy kanal pouzivatela, ak ziadny nema tak nastavi prazdny nazov
+    // zisti ci je kanal zvyrazneny pre prihlaseneho pouzivatela
+    isChannelHighlighted(channelName) {
+      if (!this.currentUser || !this.highlightedChannels[this.currentUser]) {
+        return false
+      }
+      return this.highlightedChannels[this.currentUser].includes(channelName)
+    },
+
+    // funkcia na rucnu zmenu poradia kanalov
+    updateChannelOrder(newOrder) {
+      if (!this.currentUser) return
+      this.userChannelOrders[this.currentUser] = newOrder
+    },
+
+    // prepne na prvy nezvyrazneny kanal pouzivatela, ak ziadny nezvyrazneny nema tak na prvy kanal
     selectFirstChannel() {
       if (this.myChannels.length > 0) {
-        this.activeChannelName = this.myChannels[0].name
+        // najprv skusime najst kanal, ktory nie je zvyrazneny (aby sa novy kanal neotvoril automaticky)
+        const regularChannel = this.myChannels.find((c) => !this.isChannelHighlighted(c.name))
+
+        if (regularChannel) {
+          this.activeChannelName = regularChannel.name
+        } else {
+          this.activeChannelName = this.myChannels[0].name
+        }
       } else {
         this.activeChannelName = ''
       }
@@ -292,6 +428,11 @@ export const useChatStore = defineStore('chat', {
 
       // pridanie spravy do zoznamu sprav pre aktualny kanal
       this.messages[this.activeChannelName].push(newMessage)
+
+      // ak mame nastaveny pocet viditelnych sprav, zvysime ho o 1
+      if (this.visibleMessageCounts[this.activeChannelName] !== undefined) {
+        this.visibleMessageCounts[this.activeChannelName]++
+      }
     },
 
     // vyhodenie pouzivatela z kanala
@@ -386,6 +527,29 @@ export const useChatStore = defineStore('chat', {
         name: nickName,
         role: 'member',
       })
+
+      // topovanie - pridame alebo posunieme kanal na zaciatok poradia pre pozvaneho pouzivatela
+      if (!this.userChannelOrders[nickName]) {
+        // ak pozvany pouzivatel este nema vlastne poradie, vytvorime ho z jeho kanalov
+        const userChannels = this.channels
+          .filter((c) => c.members.some((m) => m.name === nickName))
+          .map((c) => c.name)
+        this.userChannelOrders[nickName] = userChannels
+      }
+
+      // vyberieme kanal z existujuceho poradia a dame ho na prve miesto
+      const currentOrder = this.userChannelOrders[nickName].filter(
+        (ch) => ch !== this.activeChannelName,
+      )
+      this.userChannelOrders[nickName] = [this.activeChannelName, ...currentOrder]
+
+      // pridame kanal do zoznamu zvyraznenych kanalov pre pozvaneho pouzivatela
+      if (!this.highlightedChannels[nickName]) {
+        this.highlightedChannels[nickName] = []
+      }
+      if (!this.highlightedChannels[nickName].includes(this.activeChannelName)) {
+        this.highlightedChannels[nickName].push(this.activeChannelName)
+      }
 
       notifySuccess(
         `Používateľ ${nickName} bol úspešne pridaný do kanála #${this.activeChannelName}`,

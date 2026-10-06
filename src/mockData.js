@@ -105,21 +105,30 @@ export const channels = [
 // predvolene spravy pre jednotlive kanaly
 export const messages = {
   general: [
-    {
-      user: 'ed',
-      time: '12:30',
-      text: 'Ahoj vsetci, toto je ukazkova sprava v kanali #general.',
-    },
-    {
-      user: 'jozef',
-      time: '12:32',
-      text: 'Pozdravujem @juro, pozri si novy dizajn!',
-    },
-    {
-      user: 'juro',
-      time: '12:35',
-      text: 'Super, vyzera to fajn a cisto.',
-    },
+    { user: 'juro', time: '08:00', text: 'Vytvoril som novy kanal #general pre vsetkych.' },
+    { user: 'jozef', time: '08:05', text: 'Super, diky @juro!' },
+    { user: 'mara', time: '08:10', text: 'Ahoojte.' },
+    { user: 'ed', time: '08:15', text: 'Ahoj, ako to ide?' },
+    { user: 'peto', time: '08:20', text: 'Ja som zabudol ze dnes je to odovzdanie' },
+    { user: 'zuzka', time: '08:30', text: 'Ved som ti to spominala' },
+    { user: 'juro', time: '09:00', text: 'aaaaaaaaaaaaaaaaaaa' },
+    { user: 'jozef', time: '09:15', text: 'co sa deje ???' },
+    { user: 'mara', time: '09:30', text: 'idk' },
+    { user: 'ed', time: '10:00', text: 'Funguje to?' },
+    { user: 'peto', time: '10:30', text: 'Co?' },
+    { user: 'zuzka', time: '10:45', text: 'No ved ten chat mysli' },
+    { user: 'juro', time: '11:00', text: 'Jasnacka, dostavam upozornenia vsetko.' },
+    { user: 'jozef', time: '11:30', text: '.' },
+    { user: 'mara', time: '12:00', text: 'Ide niekto na obed?' },
+    { user: 'ed', time: '12:30', text: 'Ja pojdem, ale az neskor' },
+    { user: 'jozef', time: '12:32', text: 'Isiel by som teraz' },
+    { user: 'juro', time: '12:35', text: 'Tiez sa pridam' },
+    { user: 'peto', time: '13:00', text: 'Pockajte maa, idem aj ja' },
+    { user: 'zuzka', time: '13:15', text: 'mne sa neda' },
+    { user: 'mara', time: '13:30', text: 'Cakame pred intrakom.' },
+    { user: 'ed', time: '14:00', text: 'uz mozem aj ja' },
+    { user: 'juro', time: '14:30', text: 'Skoda, my sme uz boli.' },
+    { user: 'jozef', time: '15:00', text: ':<(' },
   ],
   test1: [
     {

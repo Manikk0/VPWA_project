@@ -1,6 +1,9 @@
 <template>
-  <!-- hlavna stranka s chatovacim oknom -->
-  <q-page class="column justify-between bg-dust-grey">
+  <!-- hlavna stranka s chatovacim oknom (fixna vyska aby sa scroloval iba stred) -->
+  <q-page
+    class="column justify-between bg-dust-grey"
+    style="height: calc(100vh - 50px); max-height: calc(100vh - 50px); overflow: hidden"
+  >
     <!-- ak pouzivatel nema vybrany ziadny svoj kanal, zobrazime prazdny stav -->
     <div
       v-if="!chatStore.activeChannel"
@@ -17,7 +20,7 @@
 
     <!-- ak je vybrany kanal, zobrazime obsah chatu -->
     <template v-else>
-      <!-- horna lista aktualne vybraneho kanala -->
+      <!-- horna lista aktualne vybraneho kanala (fixna na vrchu) -->
       <div class="q-pa-md bg-dry-sage text-pine-teal row items-center justify-between shadow-1">
         <div>
           <span class="text-h6 text-weight-bold"># {{ chatStore.activeChannelName }}</span>
@@ -74,7 +77,11 @@
       </div>
 
       <!-- priestor pre zoznam sprav -->
-      <div ref="messagesContainer" class="col q-pa-md overflow-auto">
+      <div
+        ref="messagesContainer"
+        class="col q-pa-md overflow-auto"
+        @scroll="handleContainerScroll"
+      >
         <!-- oznam ak v kanali este nie su ziadne spravy -->
         <div v-if="chatStore.activeMessages.length === 0" class="text-center text-grey-7 q-pa-xl">
           <q-icon name="chat_bubble_outline" size="48px" class="q-mb-sm text-grey-5" />
@@ -83,56 +90,103 @@
           </div>
         </div>
 
-        <!-- dynamicky zoznam sprav z aktualneho kanala -->
-        <div
-          v-for="(msg, index) in chatStore.activeMessages"
-          :key="index"
-          class="q-mb-md q-pa-sm rounded-borders shadow-1"
-          :class="[
-            msg.user === chatStore.currentUser ? 'bg-fern text-white q-ml-auto' : 'bg-white',
-            isMentioned(msg) ? 'mentioned-message' : '',
-          ]"
-          style="max-width: 70%; width: fit-content; min-width: 140px"
+        <!-- nekonecne scrolovanie pre nacitavanie staršich sprav smerom nahor -->
+        <q-infinite-scroll
+          v-else
+          :key="chatStore.activeChannelName"
+          reverse
+          :disable="!userScrolledUp"
+          @load="onLoadOlderMessages"
+          :offset="100"
         >
-          <!-- meno odosielatela a cas spravy -->
-          <div
-            class="text-weight-bold row items-center justify-between q-gutter-xs"
-            :class="msg.user === chatStore.currentUser ? 'text-dust-grey' : 'text-hunter-green'"
-          >
-            <span>{{ msg.user }}</span>
-            <span
-              class="text-caption"
-              :class="msg.user === chatStore.currentUser ? 'text-dust-grey' : 'text-grey'"
-            >
-              {{ msg.time }}
-            </span>
-          </div>
+          <!-- nacitavaci spiner pri scrollovani nahor -->
+          <template #loading>
+            <div class="row justify-center q-my-sm">
+              <q-spinner-dots color="pine-teal" size="30px" />
+            </div>
+          </template>
 
-          <!-- text samotnej spravy so zvyraznenim zavinaca -->
+          <!-- zoznam sprav z aktualneho kanala -->
           <div
-            class="q-mt-xs"
-            :class="msg.user === chatStore.currentUser ? 'text-white' : 'text-dark'"
-            style="word-break: break-word"
+            v-for="(msg, index) in chatStore.activeMessages"
+            :key="index"
+            class="q-mb-md q-pa-sm rounded-borders shadow-1"
+            :class="[
+              msg.user === chatStore.currentUser ? 'bg-fern text-white q-ml-auto' : 'bg-white',
+              isMentioned(msg) ? 'mentioned-message' : '',
+            ]"
+            style="max-width: 70%; width: fit-content; min-width: 140px"
           >
-            <span v-for="(word, wIndex) in msg.text.split(' ')" :key="wIndex">
-              <!-- ak slovo zacina @, zvyraznime ho ako stitok -->
+            <!-- meno odosielatela a cas spravy -->
+            <div
+              class="text-weight-bold row items-center justify-between q-gutter-xs"
+              :class="msg.user === chatStore.currentUser ? 'text-dust-grey' : 'text-hunter-green'"
+            >
+              <span>{{ msg.user }}</span>
               <span
-                v-if="word.startsWith('@')"
-                class="bg-hunter-green text-dust-grey q-px-xs rounded-borders text-weight-bold"
+                class="text-caption"
+                :class="msg.user === chatStore.currentUser ? 'text-dust-grey' : 'text-grey'"
               >
-                {{ word }}
+                {{ msg.time }}
               </span>
-              <!-- inak je to bezne slovo v sprave -->
-              <span v-else>{{ word }}</span>
-              {{ ' ' }}
-            </span>
+            </div>
+
+            <!-- text samotnej spravy so zvyraznenim zavinaca -->
+            <div
+              class="q-mt-xs"
+              :class="msg.user === chatStore.currentUser ? 'text-white' : 'text-dark'"
+              style="word-break: break-word"
+            >
+              <span v-for="(word, wIndex) in msg.text.split(' ')" :key="wIndex">
+                <!-- ak slovo zacina @, zvyraznime ho ako stitok -->
+                <span
+                  v-if="word.startsWith('@')"
+                  class="bg-hunter-green text-dust-grey q-px-xs rounded-borders text-weight-bold"
+                >
+                  {{ word }}
+                </span>
+                <!-- inak je to bezne slovo v sprave -->
+                <span v-else>{{ word }}</span>
+                {{ ' ' }}
+              </span>
+            </div>
           </div>
-        </div>
+        </q-infinite-scroll>
       </div>
     </template>
 
     <!-- spodny fixny prikazovy riadok -->
     <div class="q-pa-md bg-pine-teal">
+      <!-- indikator pisucich pouzivatelov -->
+      <div
+        v-if="chatStore.currentTypingUsers.length > 0"
+        class="text-caption text-dust-grey q-mb-xs row items-center q-gutter-xs"
+      >
+        <q-spinner-dots color="dry-sage" size="18px" />
+        <span class="row items-center wrap">
+          <template v-for="(nick, nIdx) in chatStore.currentTypingUsers" :key="nick">
+            <span
+              class="text-weight-bold text-dry-sage cursor-pointer q-mr-xs"
+              style="text-decoration: underline"
+              @click="showTypingDraft(nick)"
+            >
+              {{ nick }}
+              <q-tooltip>Kliknite pre zobrazenie rozpísanej správy</q-tooltip>
+            </span>
+            <span v-if="nIdx < chatStore.currentTypingUsers.length - 1" class="q-mr-xs"
+              >,&nbsp;</span
+            >
+          </template>
+          <span class="text-weight-medium text-italic">
+            {{
+              chatStore.currentTypingUsers.length > 1
+                ? 'práve píšu správu...'
+                : 'práve píše správu...'
+            }}
+          </span>
+        </span>
+      </div>
+
       <div class="row items-center q-gutter-sm">
         <!-- textove pole pre spravu alebo prikaz -->
         <q-input
@@ -200,13 +254,27 @@ function promptInviteUser() {
   })
 }
 
+// zobrazi dialog s rozpisanym textom pouzivatela po kliknuti na jeho nick
+function showTypingDraft(nick) {
+  const draft = chatStore.getTypingDraft(nick)
+  Dialog.create({
+    title: `Rozpísaná správa od @${nick}`,
+    message: draft ? `"${draft}"` : 'Zatiaľ nezadal žiadny text...',
+    color: 'pine-teal',
+    ok: {
+      label: 'Zavrieť',
+      color: 'fern',
+    },
+  })
+}
+
 // funkcia zisti ci je v sprave od ineho pouzivatela spomenuty aktualne prihlaseny pouzivatel so zavinacom
 function isMentioned(msg) {
   if (msg.user === chatStore.currentUser) return false
   return msg.text.includes(`@${chatStore.currentUser}`)
 }
 
-// funkcia na posun chatu uplne na spodok pri novej sprave
+// funkcia na posun chatu uplne nadol
 function scrollToBottom() {
   nextTick(() => {
     if (messagesContainer.value) {
@@ -215,12 +283,48 @@ function scrollToBottom() {
   })
 }
 
-// ked pribudne nova sprava (napr. od ineho pouzivatela), posunieme chat na spodok
+// priznak ci pouzivatel fyzicky scroloval nahor k vrchu chatu
+const userScrolledUp = ref(false)
+
+// funkcia zachytava fyzicke scrolovanie v okne sprav
+function handleContainerScroll() {
+  if (!messagesContainer.value) return
+
+  // ak sa pouzivatel dostane dostatocne blizko k vrchu (scrollTop < 100), povolime infinite scroll
+  if (messagesContainer.value.scrollTop < 100) {
+    userScrolledUp.value = true
+  }
+}
+
+// funkcia na nacitanie starsich sprav pri scrollovani nahor
+function onLoadOlderMessages(index, done) {
+  // ak pouzivatel este fyzicky nescroloval nahor, nevolame nacitavanie
+  if (!userScrolledUp.value) {
+    done()
+    return
+  }
+
+  // simulujeme kratke zdrzanie pre krajsi vizualny efekt nacitavania
+  setTimeout(() => {
+    const hasMore = chatStore.loadOlderMessages()
+    if (!hasMore) {
+      // ak uz nie su ziadne dalsie starsie spravy v kanali, zastavime infinite scroll
+      done(true)
+    } else {
+      // nacitali sme dalsiu davku sprav
+      done()
+    }
+  }, 500)
+}
+
+// ked sa prepne kanal, posunieme chat na spodok (k najnovsim spravam) a zakazeme infinite scroll kym pouzivatel nescroloval
 watch(
-  () => chatStore.activeMessages.length,
+  () => chatStore.activeChannelName,
   () => {
+    userScrolledUp.value = false
     scrollToBottom()
   },
+  { immediate: true },
 )
 
 // funkcia na spracovanie odoslania spravy alebo prikazu

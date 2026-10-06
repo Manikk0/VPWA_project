@@ -102,7 +102,23 @@
             <q-item-section avatar>
               <q-icon :name="ch.isPrivate ? 'lock' : 'tag'" />
             </q-item-section>
-            <q-item-section>{{ ch.name }}</q-item-section>
+            <q-item-section>
+              <div class="row items-center justify-between">
+                <span
+                  :class="{
+                    'text-weight-bold text-white': chatStore.isChannelHighlighted(ch.name),
+                  }"
+                >
+                  {{ ch.name }}
+                </span>
+                <!-- mala znacka ak je kanal zvyrazneny po pozvani -->
+                <q-badge
+                  v-if="chatStore.isChannelHighlighted(ch.name)"
+                  label="Pozvánka"
+                  class="bg-dry-sage text-pine-teal q-ml-xs text-weight-bold"
+                />
+              </div>
+            </q-item-section>
           </q-item>
         </q-list>
       </div>
@@ -297,7 +313,26 @@ function simulateIncomingMessage() {
   const sender = senders[Math.floor(Math.random() * senders.length)]
   const text = fakeTexts[Math.floor(Math.random() * fakeTexts.length)]
 
-  chatStore.receiveMessage(channel.name, sender, text)
+  // nastavime ze pouzivatel zacal pisat spravu a simulujeme postupne prirastanie textu
+  const fullText = text
+  let currentLength = 0
+  const stepInterval = Math.max(50, Math.floor(4000 / fullText.length))
+
+  const typingProgressTimer = setInterval(() => {
+    currentLength += Math.floor(Math.random() * 2) + 1
+    if (currentLength >= fullText.length) {
+      currentLength = fullText.length
+      clearInterval(typingProgressTimer)
+    }
+    const partialText = fullText.slice(0, currentLength)
+    chatStore.setTyping(channel.name, sender, true, partialText)
+  }, stepInterval)
+
+  // po 5 sekundach spravu realne posleme (indikator zhasne)
+  setTimeout(() => {
+    clearInterval(typingProgressTimer)
+    chatStore.receiveMessage(channel.name, sender, fullText)
+  }, 5000)
 }
 
 // po nacitani layoutu spustime simulaciu kazdych 20 sekund
