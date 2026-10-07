@@ -84,22 +84,21 @@ export const useChatStore = defineStore('chat', {
 
     // vrati zoznam sprav pre aktualne vybrany kanal (podla poctu nacitanych sprav)
     activeMessages() {
-      const allMessages = this.messages[this.activeChannelName] || []
+      let allMessages = this.messages[this.activeChannelName] || []
       const visibleCount = this.visibleMessageCounts[this.activeChannelName] || 10
 
-      // vezmeme poslednych `visibleCount` sprav z celkovej historie
-      const startIndex = Math.max(0, allMessages.length - visibleCount)
-      let visible = allMessages.slice(startIndex)
-
-      // ak je pouzivatel offline, zobrazime iba spravy, ktore prisli pred prepnutim do offline
+      // 1. krok: ak je pouzivatel offline, odstranime z celej historie spravy,
+      // ktore prisli az po prepnuti do offline
       if (this.currentUserStatus === 'Offline') {
         const count = this.offlineMessageCounts[this.activeChannelName]
         if (count !== undefined) {
-          visible = visible.slice(0, count)
+          allMessages = allMessages.slice(0, count)
         }
       }
 
-      return visible
+      // 2. krok: z ostatnych sprav vezmeme iba poslednych `visibleCount` (kvoli infinite scrollu)
+      const startIndex = Math.max(0, allMessages.length - visibleCount)
+      return allMessages.slice(startIndex)
     },
 
     // vrati iba kanaly, v ktorych je prihlaseny pouzivatel clenom
@@ -233,10 +232,8 @@ export const useChatStore = defineStore('chat', {
       // ked pouzivatel posle spravu, zrusime jeho stav pisania
       this.setTyping(channelName, sender, false)
 
-      // ak mame nastaveny pocet viditelnych sprav, zvysime ho o 1 aby sa nova sprava zobrazila
-      if (this.visibleMessageCounts[channelName] !== undefined) {
-        this.visibleMessageCounts[channelName]++
-      }
+      // zvysime pocet viditelnych sprav, aby nova sprava nevytlacila najstarsiu z obrazovky
+      this.increaseVisibleCount(channelName)
 
       // upozornenie zobrazime iba ak je pouzivatel online
       // a sprava prisla do ineho kanala, nez ktory ma prave otvoreny
@@ -318,8 +315,26 @@ export const useChatStore = defineStore('chat', {
       const existingChannel = this.channels.find((c) => c.name === cleanName)
 
       if (existingChannel) {
-        // kanal uz existuje, sprava Kanal s menom --- uz existuje
-        notifyError(`Kanal s menom #${cleanName} uz existuje`)
+        // kanal uz existuje - zistime ci v nom pouzivatel uz je
+        const isMember = existingChannel.members.some((m) => m.name === this.currentUser)
+
+        if (isMember) {
+          // pouzivatel uz je clenom, iba ho prepneme do kanala
+          this.selectChannel(cleanName)
+          notifyInfo(`Už ste členom kanála #${cleanName}`)
+          return
+        }
+
+        // do sukromneho kanala sa neda pridat cez /join, pridat moze iba spravca cez /invite
+        if (existingChannel.isPrivate) {
+          notifyError(`Kanál #${cleanName} je súkromný, pridať vás môže iba jeho správca`)
+          return
+        }
+
+        // verejny kanal - pridame pouzivatela medzi clenov a prepneme ho don
+        existingChannel.members.push({ name: this.currentUser, role: 'member' })
+        this.selectChannel(cleanName)
+        notifySuccess(`Pridali ste sa do kanála #${cleanName}`)
       } else {
         // novy kanal
         const newChannel = {
@@ -429,10 +444,14 @@ export const useChatStore = defineStore('chat', {
       // pridanie spravy do zoznamu sprav pre aktualny kanal
       this.messages[this.activeChannelName].push(newMessage)
 
-      // ak mame nastaveny pocet viditelnych sprav, zvysime ho o 1
-      if (this.visibleMessageCounts[this.activeChannelName] !== undefined) {
-        this.visibleMessageCounts[this.activeChannelName]++
-      }
+      // zvysime pocet viditelnych sprav, aby nova sprava nevytlacila najstarsiu z obrazovky
+      this.increaseVisibleCount(this.activeChannelName)
+    },
+
+    // zvysi pocet viditelnych sprav v kanali o 1 (ak este nie je nastaveny, zacina sa od 10)
+    increaseVisibleCount(channelName) {
+      const currentCount = this.visibleMessageCounts[channelName] || 10
+      this.visibleMessageCounts[channelName] = currentCount + 1
     },
 
     // vyhodenie pouzivatela z kanala

@@ -327,6 +327,17 @@ watch(
   { immediate: true },
 )
 
+// funkcia vrati pocet vsetkych sprav v aktualnom kanali (nielen zobrazenych)
+function totalMessagesInChannel() {
+  const channelMessages = chatStore.messages[chatStore.activeChannelName] || []
+  return channelMessages.length
+}
+
+// ked pribudne nova sprava, posunieme chat na spodok
+watch(totalMessagesInChannel, () => {
+  scrollToBottom()
+})
+
 // funkcia na spracovanie odoslania spravy alebo prikazu
 function handleSend() {
   const text = messageText.value.trim()
