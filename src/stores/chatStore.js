@@ -50,6 +50,9 @@ export const useChatStore = defineStore('chat', {
 
     // slovnik pre rozpisane texty sprav pouzivatelov { general: { ed: 'Ahoj...' } }
     typingDrafts: {},
+
+    // priznak ci si pouzivatel zela notifikacie iba pre spravy adresovane jemu (@nick)
+    onlyMentionNotifications: false,
   }),
 
   getters: {
@@ -238,7 +241,15 @@ export const useChatStore = defineStore('chat', {
       // upozornenie zobrazime iba ak je pouzivatel online
       // a sprava prisla do ineho kanala, nez ktory ma prave otvoreny
       if (this.currentUserStatus === 'Online' && channelName !== this.activeChannelName) {
-        notifyNewMessage(channelName, sender, text)
+        // ak ma pouzivatel zapnute notifikacie iba pre adresovane spravy, skontrolujeme ci sprava obsahuje jeho @nick
+        if (this.onlyMentionNotifications) {
+          const isMentioned = text.includes(`@${this.currentUser}`)
+          if (isMentioned) {
+            notifyNewMessage(channelName, sender, text)
+          }
+        } else {
+          notifyNewMessage(channelName, sender, text)
+        }
       }
     },
 
@@ -457,6 +468,12 @@ export const useChatStore = defineStore('chat', {
     // vyhodenie pouzivatela z kanala
     kickUser(nickName) {
       if (!this.activeChannel || !nickName) return
+
+      // nemozeme vyhodit spravcu kanala
+      if (nickName === this.activeChannel.createdBy) {
+        notifyWarning('Nemôžete vyhodiť správcu kanála!')
+        return
+      }
 
       // najdeme pouzivatela v zozname clenov podla nicku
       const memberIndex = this.activeChannel.members.findIndex((m) => m.name === nickName)

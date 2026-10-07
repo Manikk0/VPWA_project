@@ -145,6 +145,12 @@ function handleSubmit() {
     const cleanNick = nickname.value.trim().toLowerCase()
     const cleanEmail = loginIdentifier.value.trim().toLowerCase()
 
+    // kontrola ci zadany email je validny (obsahuje @, bodku a ma aspon 5 znakov)
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.') || cleanEmail.length < 5) {
+      notifyError('Zadajte platný email!')
+      return
+    }
+
     // kontrola ci uz nahodou pouzivatel s takym nickom existuje
     if (chatStore.users.find((u) => u.nick.toLowerCase() === cleanNick)) {
       notifyError('Používateľ s týmto nickom už existuje!')

@@ -47,10 +47,29 @@
             </q-menu>
           </q-btn>
 
-          <!-- ikona profilu pouzivatela -->
+          <!-- ikona profilu pouzivatela a nastavenia -->
           <q-btn flat dense round>
             <q-icon name="account_circle" size="34px" />
-            <q-tooltip>Profil pouzivatela</q-tooltip>
+            <q-tooltip>Profil a nastavenia</q-tooltip>
+
+            <!-- menu s nastaveniami pouzivatela -->
+            <q-menu class="bg-pine-teal text-dust-grey shadow-4 rounded-borders q-pa-xs">
+              <q-list dense style="min-width: 250px">
+                <q-item-label header class="text-dry-sage text-weight-bold" style="font-size: 11px">
+                  NASTAVENIA UPOZORNENÍ
+                </q-item-label>
+                <q-item tag="label" v-ripple class="rounded-borders">
+                  <q-item-section>
+                    <q-item-label class="text-caption text-weight-medium">
+                      Notifikovať iba spomenutia (@{{ chatStore.currentUser }})
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section side>
+                    <q-toggle v-model="chatStore.onlyMentionNotifications" color="fern" />
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
           </q-btn>
 
           <!-- blok s menom prihlaseneho pouzivatela -->
