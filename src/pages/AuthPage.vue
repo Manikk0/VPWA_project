@@ -171,6 +171,8 @@ function handleSubmit() {
       password: password.value,
       // novy pouzivatel je predvolene online
       status: 'Online',
+      // novy pouzivatel dostava notifikacie pre vsetky spravy
+      onlyMentions: false,
     }
 
     // pridanie noveho pouzivatela do zoznamov v store

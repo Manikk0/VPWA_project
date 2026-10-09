@@ -65,7 +65,12 @@
                     </q-item-label>
                   </q-item-section>
                   <q-item-section side>
-                    <q-toggle v-model="chatStore.onlyMentionNotifications" color="fern" />
+                    <!-- hodnota sa cita z prihlaseneho pouzivatela a pri zmene sa ulozi cez setOnlyMentions -->
+                    <q-toggle
+                      :model-value="chatStore.currentUserOnlyMentions"
+                      @update:model-value="chatStore.setOnlyMentions"
+                      color="fern"
+                    />
                   </q-item-section>
                 </q-item>
               </q-list>
@@ -332,8 +337,13 @@ function simulateIncomingMessage() {
   const sender = senders[Math.floor(Math.random() * senders.length)]
   const text = fakeTexts[Math.floor(Math.random() * fakeTexts.length)]
 
+  // cca kazda tretia sprava spomenie prihlaseneho pouzivatela
+  let fullText = text
+  if (Math.random() < 0.33) {
+    fullText = `@${chatStore.currentUser} ${text}`
+  }
+
   // nastavime ze pouzivatel zacal pisat spravu a simulujeme postupne prirastanie textu
-  const fullText = text
   let currentLength = 0
   const stepInterval = Math.max(50, Math.floor(4000 / fullText.length))
 

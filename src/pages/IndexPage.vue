@@ -290,8 +290,11 @@ const userScrolledUp = ref(false)
 function handleContainerScroll() {
   if (!messagesContainer.value) return
 
+  const box = messagesContainer.value
+  if (box.scrollHeight <= box.clientHeight) return
+
   // ak sa pouzivatel dostane dostatocne blizko k vrchu (scrollTop < 100), povolime infinite scroll
-  if (messagesContainer.value.scrollTop < 100) {
+  if (box.scrollTop < 100) {
     userScrolledUp.value = true
   }
 }
@@ -301,6 +304,13 @@ function onLoadOlderMessages(index, done) {
   // ak pouzivatel este fyzicky nescroloval nahor, nevolame nacitavanie
   if (!userScrolledUp.value) {
     done()
+    return
+  }
+
+  // ak su uz zobrazene vsetky spravy kanala, hned zastavime infinite scroll (bez loadera)
+  const visibleCount = chatStore.visibleMessageCounts[chatStore.activeChannelName] || 10
+  if (visibleCount >= totalMessagesInChannel()) {
+    done(true)
     return
   }
 

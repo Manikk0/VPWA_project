@@ -50,9 +50,6 @@ export const useChatStore = defineStore('chat', {
 
     // slovnik pre rozpisane texty sprav pouzivatelov { general: { ed: 'Ahoj...' } }
     typingDrafts: {},
-
-    // priznak ci si pouzivatel zela notifikacie iba pre spravy adresovane jemu (@nick)
-    onlyMentionNotifications: false,
   }),
 
   getters: {
@@ -69,6 +66,14 @@ export const useChatStore = defineStore('chat', {
     // vrati stav aktualne prihlaseneho pouzivatela (Online, DND, Offline)
     currentUserStatus: (state) => {
       return getUserStatus(state.currentUser, state.users)
+    },
+
+    // vrati ci ma prihlaseny pouzivatel zapnute notifikacie iba pre spravy s jeho @nick
+    currentUserOnlyMentions: (state) => {
+      const user = state.users.find((u) => u.nick === state.currentUser)
+      // ak pouzivatel nema nastavenie, berieme ze chce vsetky notifikacie
+      if (!user || !user.onlyMentions) return false
+      return true
     },
 
     // vrati sformatovany text pisucich pouzivatelov pre aktualne vybrany kanal
@@ -219,6 +224,13 @@ export const useChatStore = defineStore('chat', {
       return this.typingDrafts[this.activeChannelName][nick] || ''
     },
 
+    // zapnutie / vypnutie notifikacii iba pre spravy s @nick
+    setOnlyMentions(value) {
+      const user = this.users.find((u) => u.nick === this.currentUser)
+      if (!user) return
+      user.onlyMentions = value
+    },
+
     // prijatie novej spravy od ineho pouzivatela
     receiveMessage(channelName, sender, text) {
       if (!this.messages[channelName]) {
@@ -242,7 +254,7 @@ export const useChatStore = defineStore('chat', {
       // a sprava prisla do ineho kanala, nez ktory ma prave otvoreny
       if (this.currentUserStatus === 'Online' && channelName !== this.activeChannelName) {
         // ak ma pouzivatel zapnute notifikacie iba pre adresovane spravy, skontrolujeme ci sprava obsahuje jeho @nick
-        if (this.onlyMentionNotifications) {
+        if (this.currentUserOnlyMentions) {
           const isMentioned = text.includes(`@${this.currentUser}`)
           if (isMentioned) {
             notifyNewMessage(channelName, sender, text)

@@ -1,5 +1,6 @@
 // registrovani pouzivatelia aplikacie
 // status moze byt 'Online', 'DND' alebo 'Offline'
+// onlyMentions = true znamena, ze pouzivatel chce notifikacie iba pre spravy s jeho @nick
 export const users = [
   {
     email: 'user@test.sk',
@@ -7,6 +8,7 @@ export const users = [
     nick: 'juro',
     name: 'Juraj Metlicka',
     status: 'Online',
+    onlyMentions: false,
   },
   {
     email: 'jozef@test.sk',
@@ -14,22 +16,39 @@ export const users = [
     nick: 'jozef',
     name: 'Jozef Mrkvicka',
     status: 'Online',
+    onlyMentions: false,
   },
-  { email: 'ed@test.sk', password: '123', nick: 'ed', name: 'Ed Tester', status: 'DND' },
+  {
+    email: 'ed@test.sk',
+    password: '123',
+    nick: 'ed',
+    name: 'Ed Tester',
+    status: 'DND',
+    onlyMentions: false,
+  },
   {
     email: 'mara@test.sk',
     password: '123',
     nick: 'mara',
     name: 'Maria Kovacova',
     status: 'Online',
+    onlyMentions: true,
   },
-  { email: 'peto@test.sk', password: '123', nick: 'peto', name: 'Peter Novak', status: 'Offline' },
+  {
+    email: 'peto@test.sk',
+    password: '123',
+    nick: 'peto',
+    name: 'Peter Novak',
+    status: 'Offline',
+    onlyMentions: false,
+  },
   {
     email: 'zuzka@test.sk',
     password: '123',
     nick: 'zuzka',
     name: 'Zuzana Hraskova',
     status: 'Online',
+    onlyMentions: false,
   },
 ]
 
