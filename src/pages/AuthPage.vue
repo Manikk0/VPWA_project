@@ -1,6 +1,6 @@
 <template>
   <!-- hlavny kontajner prihlasovacej a registracnej stranky -->
-  <div class="fullscreen bg-dust-grey flex flex-center q-pa-md">
+  <div class="bg-dust-grey flex flex-center q-pa-md" style="min-height: 100vh">
     <!-- karta prihlasenia -->
     <div style="width: 100%; max-width: 400px" class="text-center">
       <!-- ikona aplikacie -->

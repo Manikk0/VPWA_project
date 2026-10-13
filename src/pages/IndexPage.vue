@@ -21,17 +21,27 @@
     <!-- ak je vybrany kanal, zobrazime obsah chatu -->
     <template v-else>
       <!-- horna lista aktualne vybraneho kanala (fixna na vrchu) -->
-      <div class="q-pa-md bg-dry-sage text-pine-teal row items-center justify-between shadow-1">
-        <div>
-          <span class="text-h6 text-weight-bold"># {{ chatStore.activeChannelName }}</span>
-          <!-- popis kanala zobrazeny vedla nazvu -->
-          <span v-if="chatStore.activeChannel?.description" class="text-caption q-ml-sm">
+      <div
+        class="q-pa-md bg-dry-sage text-pine-teal row no-wrap items-center justify-between shadow-1"
+      >
+        <!-- col + ellipsis: nazov zaberie zvysne miesto a dlhy text sa skrati trojbodkou -->
+        <div class="col ellipsis">
+          <!-- nazov kanala (na mobile sa da kliknut a zobrazi sa popup s popisom) -->
+          <span
+            class="text-h6 text-weight-bold"
+            :class="{ 'cursor-pointer': $q.screen.xs }"
+            @click="showChannelInfo"
+          >
+            # {{ chatStore.activeChannelName }}
+          </span>
+          <!-- popis kanala vedla nazvu (na mobile sa skryje) -->
+          <span v-if="chatStore.activeChannel?.description" class="text-caption q-ml-sm gt-xs">
             {{ chatStore.activeChannel.description }}
           </span>
         </div>
 
         <!-- pomocne tlacidla pre kanal -->
-        <div class="row items-center q-gutter-xs">
+        <div class="row no-wrap items-center q-gutter-xs">
           <!-- tlacidlo na otvorenie praveho menu so zoznamom clenov -->
           <q-btn flat dense round icon="people" class="text-pine-teal" @click="toggleRightDrawer">
             <q-tooltip>Clenovia kanala</q-tooltip>
@@ -221,11 +231,34 @@
 <script setup>
 import { ref, inject, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chatStore'
-import { Dialog } from 'quasar'
+import { Dialog, useQuasar } from 'quasar'
 import { notifyWarning } from '@/utils/helper_functions'
 
 // nacitanie storu pre chat
 const chatStore = useChatStore()
+
+// quasar objekt - pouzivame ho na zistenie velkosti obrazovky ($q.screen)
+const $q = useQuasar()
+
+// po kliknuti na nazov kanala zobrazi na mobile popup s nazvom a popisom kanala
+function showChannelInfo() {
+  // na vacsej obrazovke je popis vidno priamo v liste, popup netreba
+  if (!$q.screen.xs) return
+
+  let description = chatStore.activeChannel.description
+  if (!description) {
+    description = 'Kanál nemá popis.'
+  }
+
+  Dialog.create({
+    title: `# ${chatStore.activeChannelName}`,
+    message: description,
+    ok: {
+      label: 'Zavrieť',
+      color: 'fern',
+    },
+  })
+}
 
 // funkcia na prepnutie praveho panelu zo zoznamom clenov z layoutu
 const toggleRightDrawer = inject('toggleRightDrawer', () => {})

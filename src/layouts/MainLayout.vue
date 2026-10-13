@@ -94,7 +94,13 @@
     </q-header>
 
     <!-- lavy bocny panel so zoznamom kanalov -->
-    <q-drawer v-model="leftDrawerOpen" side="left" bordered class="bg-hunter-green text-dust-grey">
+    <q-drawer
+      v-model="leftDrawerOpen"
+      show-if-above
+      side="left"
+      bordered
+      class="bg-hunter-green text-dust-grey"
+    >
       <div class="q-pa-sm">
         <div class="row items-center justify-between q-px-sm q-py-xs">
           <span class="text-caption text-dry-sage text-weight-bold">KANALY</span>
@@ -185,10 +191,32 @@
               >
                 Admin
               </q-badge>
+              <!-- pocet hlasov za vyhodenie clena (zobrazi sa iba ak nejake ma) -->
+              <q-badge
+                v-if="getKickVotes(m.name) > 0"
+                color="negative"
+                text-color="white"
+                class="q-ml-xs"
+              >
+                Kick {{ getKickVotes(m.name) }}/3
+              </q-badge>
             </div>
           </q-item-section>
         </q-item>
       </q-list>
+
+      <!-- zoznam pouzivatelov s trvalym banom -->
+      <template v-if="chatStore.activeChannel && chatStore.activeChannel.bannedUsers.length > 0">
+        <div class="q-px-md q-pt-md text-caption text-dry-sage text-weight-bold">ZABANOVANÍ</div>
+        <q-list dense class="q-pa-sm">
+          <q-item v-for="nick in chatStore.activeChannel.bannedUsers" :key="nick">
+            <q-item-section avatar style="min-width: 24px">
+              <q-icon name="block" size="xs" color="negative" />
+            </q-item-section>
+            <q-item-section class="text-grey-5">{{ nick }}</q-item-section>
+          </q-item>
+        </q-list>
+      </template>
     </q-drawer>
 
     <!-- hlavny obsah stranky kde sa nacitava chat -->
@@ -254,7 +282,7 @@ function handleLogout() {
   router.push('/login')
 }
 
-const leftDrawerOpen = ref(true)
+const leftDrawerOpen = ref(false)
 const rightDrawerOpen = ref(false)
 
 // poskytnutie funkcie pre potomkov na prepnutie praveho panela
@@ -269,6 +297,14 @@ const statuses = [
   { label: 'DND', color: 'negative' },
   { label: 'Offline', color: 'grey-6' },
 ]
+
+// funkcia vrati pocet hlasov za vyhodenie daneho clena v aktualnom kanali
+function getKickVotes(nick) {
+  if (!chatStore.activeChannel) return 0
+  const votes = chatStore.activeChannel.kickVotes[nick]
+  if (!votes) return 0
+  return votes.length
+}
 
 // --- dialog na vytvorenie kanala ---
 

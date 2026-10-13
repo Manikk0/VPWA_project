@@ -53,6 +53,8 @@ export const users = [
 ]
 
 // predvolene kanaly
+// bannedUsers = pouzivatelia s trvalym banom
+// kickVotes = kto hlasoval za vyhodenie koho
 export const channels = [
   {
     name: 'general',
@@ -64,7 +66,11 @@ export const channels = [
       { name: 'jozef', role: 'member' },
       { name: 'ed', role: 'member' },
       { name: 'mara', role: 'member' },
+      { name: 'peto', role: 'member' },
+      { name: 'zuzka', role: 'member' },
     ],
+    bannedUsers: [],
+    kickVotes: { ed: ['jozef', 'mara'] },
   },
   {
     name: 'test1',
@@ -75,6 +81,8 @@ export const channels = [
       { name: 'juro', role: 'admin' },
       { name: 'ed', role: 'member' },
     ],
+    bannedUsers: [],
+    kickVotes: {},
   },
   {
     name: 'test2',
@@ -85,6 +93,8 @@ export const channels = [
       { name: 'jozef', role: 'admin' },
       { name: 'juro', role: 'member' },
     ],
+    bannedUsers: [],
+    kickVotes: {},
   },
   {
     name: 'programovanie',
@@ -96,6 +106,8 @@ export const channels = [
       { name: 'mara', role: 'member' },
       { name: 'peto', role: 'member' },
     ],
+    bannedUsers: [],
+    kickVotes: {},
   },
   {
     name: 'tajne',
@@ -106,6 +118,8 @@ export const channels = [
       { name: 'mara', role: 'admin' },
       { name: 'zuzka', role: 'member' },
     ],
+    bannedUsers: [],
+    kickVotes: {},
   },
   {
     name: 'random',
@@ -118,6 +132,8 @@ export const channels = [
       { name: 'jozef', role: 'member' },
       { name: 'zuzka', role: 'member' },
     ],
+    bannedUsers: ['ed'],
+    kickVotes: {},
   },
 ]
 

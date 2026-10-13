@@ -348,6 +348,12 @@ export const useChatStore = defineStore('chat', {
           return
         }
 
+        // pouzivatel s trvalym banom sa do kanala nemoze vratit
+        if (existingChannel.bannedUsers.includes(this.currentUser)) {
+          notifyError(`V kanáli #${cleanName} máte trvalý ban, vrátiť vás môže iba správca`)
+          return
+        }
+
         // do sukromneho kanala sa neda pridat cez /join, pridat moze iba spravca cez /invite
         if (existingChannel.isPrivate) {
           notifyError(`Kanál #${cleanName} je súkromný, pridať vás môže iba jeho správca`)
@@ -366,6 +372,8 @@ export const useChatStore = defineStore('chat', {
           createdBy: this.currentUser,
           description: '',
           members: [{ name: this.currentUser, role: 'admin' }],
+          bannedUsers: [],
+          kickVotes: {},
         }
         this.channels.push(newChannel)
         this.activeChannelName = cleanName
@@ -477,28 +485,75 @@ export const useChatStore = defineStore('chat', {
       this.visibleMessageCounts[channelName] = currentCount + 1
     },
 
-    // vyhodenie pouzivatela z kanala
+    // vyhodenie pouzivatela z verejneho kanala cez /kick
     kickUser(nickName) {
       if (!this.activeChannel || !nickName) return
 
+      const channel = this.activeChannel
+
+      // /kick funguje iba vo verejnom kanali
+      if (channel.isPrivate) {
+        notifyError('Príkaz /kick funguje iba vo verejnom kanáli. V súkromnom použite /revoke')
+        return
+      }
+
+      // sam seba vyhodit nemozeme
+      if (nickName === this.currentUser) {
+        notifyWarning('Nemôžete vyhodiť sám seba. Na opustenie kanála použite /cancel')
+        return
+      }
+
       // nemozeme vyhodit spravcu kanala
-      if (nickName === this.activeChannel.createdBy) {
+      if (nickName === channel.createdBy) {
         notifyWarning('Nemôžete vyhodiť správcu kanála!')
         return
       }
 
-      // najdeme pouzivatela v zozname clenov podla nicku
-      const memberIndex = this.activeChannel.members.findIndex((m) => m.name === nickName)
-
-      if (memberIndex === -1) {
-        notifyError(`Pouzivatel ${nickName} sa v tomto kanali nenachadza!`)
+      // kontrola ci je pouzivatel clenom kanala
+      const isMember = channel.members.some((m) => m.name === nickName)
+      if (!isMember) {
+        notifyError(`Používateľ ${nickName} sa v tomto kanáli nenachádza!`)
         return
       }
 
-      // vymazeme pouzivatela zo zoznamu clenov
-      this.activeChannel.members.splice(memberIndex, 1)
+      // spravca vyhadzuje natrvalo hned
+      if (this.isCurrentAdmin) {
+        this.banUser(channel, nickName)
+        notifySuccess(`Používateľ ${nickName} bol správcom natrvalo vyhodený z #${channel.name}`)
+        return
+      }
 
-      notifySuccess(`Pouzivatel ${nickName} bol vyhodeny z kanala #${this.activeChannelName}`)
+      // bezny clen prida hlas za vyhodenie
+      if (!channel.kickVotes[nickName]) {
+        channel.kickVotes[nickName] = []
+      }
+      const votes = channel.kickVotes[nickName]
+
+      // jeden clen moze za toho isteho pouzivatela hlasovat iba raz
+      if (votes.includes(this.currentUser)) {
+        notifyWarning(`Za vyhodenie ${nickName} ste už hlasovali (${votes.length}/3)`)
+        return
+      }
+
+      votes.push(this.currentUser)
+
+      // ak su aspon 3 hlasy, pouzivatel dostane trvaly ban
+      if (votes.length >= 3) {
+        this.banUser(channel, nickName)
+        notifySuccess(`Používateľ ${nickName} dostal 3 hlasy a má trvalý ban v #${channel.name}`)
+      } else {
+        notifyInfo(`Hlasovali ste za vyhodenie ${nickName} (${votes.length}/3)`)
+      }
+    },
+
+    banUser(channel, nickName) {
+      channel.members = channel.members.filter((m) => m.name !== nickName)
+
+      if (!channel.bannedUsers.includes(nickName)) {
+        channel.bannedUsers.push(nickName)
+      }
+
+      delete channel.kickVotes[nickName]
     },
 
     // odobratie clena spravcom zo sukromneho kanala
@@ -561,6 +616,21 @@ export const useChatStore = defineStore('chat', {
       if (this.activeChannel.isPrivate && !this.isCurrentAdmin) {
         notifyError('Iba správca môže pridávať členov do súkromného kanála!')
         return
+      }
+
+      if (this.activeChannel.bannedUsers.includes(nickName)) {
+        if (!this.isCurrentAdmin) {
+          notifyError(
+            `Používateľ ${nickName} má v tomto kanáli ban, obnoviť prístup môže iba správca!`,
+          )
+          return
+        }
+
+        // spravca rusi ban
+        this.activeChannel.bannedUsers = this.activeChannel.bannedUsers.filter(
+          (n) => n !== nickName,
+        )
+        notifyInfo(`Ban pre používateľa ${nickName} bol zrušený`)
       }
 
       // kontrola ci uz pouzivatel nahodou nie je clenom kanala
