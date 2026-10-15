@@ -1,42 +1,54 @@
 <template>
   <!-- hlavny kontajner prihlasovacej a registracnej stranky -->
-  <div class="bg-dust-grey flex flex-center q-pa-md" style="min-height: 100vh">
+  <div
+    class="bg-dust-grey flex flex-center q-pa-sm q-pa-sm-md"
+    style="min-height: 100dvh; overflow: hidden"
+  >
     <!-- karta prihlasenia -->
     <div style="width: 100%; max-width: 400px" class="text-center">
       <!-- ikona aplikacie -->
-      <q-icon name="chat_bubble_outline" size="56px" class="text-pine-teal q-mb-md" />
+      <q-icon
+        name="chat_bubble_outline"
+        :size="$q.screen.lt.sm ? '40px' : $q.screen.lt.md ? '48px' : '56px'"
+        class="text-pine-teal q-mb-xs q-mb-sm-md"
+      />
 
       <!-- hlavny nadpis s nazvom aplikacie -->
-      <div class="text-h4 text-weight-bold text-pine-teal q-mb-lg">
+      <div
+        class="text-weight-bold text-pine-teal"
+        :class="[
+          $q.screen.lt.sm
+            ? isRegisterMode
+              ? 'q-mb-md text-h5'
+              : 'q-mb-lg text-h5'
+            : $q.screen.lt.md
+              ? 'q-mb-xl text-h5'
+              : 'q-mb-xl text-h4',
+        ]"
+      >
         {{ isRegisterMode ? `Registrácia na ${APP_NAME}` : `Vitajte na ${APP_NAME}` }}
       </div>
 
       <!-- formular pre prihlasenie alebo registraciu -->
-      <div class="q-gutter-y-md text-left">
+      <div class="text-left" :class="$q.screen.lt.sm ? 'q-gutter-y-sm' : 'q-gutter-y-md'">
         <!-- polia zobrazovane iba pri registracii -->
         <template v-if="isRegisterMode">
-          <!-- pole pre krstne meno -->
-          <div>
-            <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Meno</div>
-            <q-input
-              v-model="firstName"
-              bg-color="white"
-              outlined
-              dense
-              placeholder="Zadajte meno"
-            />
-          </div>
-
-          <!-- pole pre priezvisko -->
-          <div>
-            <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Priezvisko</div>
-            <q-input
-              v-model="lastName"
-              outlined
-              bg-color="white"
-              dense
-              placeholder="Zadajte priezvisko"
-            />
+          <!-- polia pre krstne meno a priezvisko vedla seba -->
+          <div class="row q-col-gutter-sm">
+            <div class="col-6">
+              <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Meno</div>
+              <q-input v-model="firstName" bg-color="white" outlined dense placeholder="Meno" />
+            </div>
+            <div class="col-6">
+              <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Priezvisko</div>
+              <q-input
+                v-model="lastName"
+                outlined
+                bg-color="white"
+                dense
+                placeholder="Priezvisko"
+              />
+            </div>
           </div>
 
           <!-- pole pre nickname -->

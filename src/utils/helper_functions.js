@@ -32,8 +32,10 @@ export function notifyNewMessage(channelName, sender, text) {
     textColor: 'pine-teal',
     icon: 'chat',
     iconColor: 'hunter-green',
-    position: 'top-right',
+    position: 'top',
     classes: 'notify-message',
+    timeout: 6000,
+    progress: true,
     // prvy riadok: kto a kam poslal spravu
     message: `${sender} v #${channelName}`,
     // druhy riadok: samotny text spravy

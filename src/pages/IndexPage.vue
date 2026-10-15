@@ -2,7 +2,7 @@
   <!-- hlavna stranka s chatovacim oknom (fixna vyska aby sa scroloval iba stred) -->
   <q-page
     class="column justify-between bg-dust-grey"
-    style="height: calc(100vh - 50px); max-height: calc(100vh - 50px); overflow: hidden"
+    style="height: calc(100dvh - 50px); max-height: calc(100dvh - 50px); overflow: hidden"
   >
     <!-- ak pouzivatel nema vybrany ziadny svoj kanal, zobrazime prazdny stav -->
     <div
@@ -22,14 +22,15 @@
     <template v-else>
       <!-- horna lista aktualne vybraneho kanala (fixna na vrchu) -->
       <div
-        class="q-pa-md bg-dry-sage text-pine-teal row no-wrap items-center justify-between shadow-1"
+        class="bg-dry-sage text-pine-teal row no-wrap items-center justify-between shadow-1"
+        :class="$q.screen.lt.sm ? 'q-px-sm q-py-xs' : 'q-pa-md'"
       >
         <!-- col + ellipsis: nazov zaberie zvysne miesto a dlhy text sa skrati trojbodkou -->
         <div class="col ellipsis">
           <!-- nazov kanala (na mobile sa da kliknut a zobrazi sa popup s popisom) -->
           <span
-            class="text-h6 text-weight-bold"
-            :class="{ 'cursor-pointer': $q.screen.xs }"
+            class="text-weight-bold"
+            :class="[$q.screen.lt.sm ? 'text-subtitle1 cursor-pointer' : 'text-h6']"
             @click="showChannelInfo"
           >
             # {{ chatStore.activeChannelName }}
@@ -166,7 +167,7 @@
     </template>
 
     <!-- spodny fixny prikazovy riadok -->
-    <div class="q-pa-md bg-pine-teal">
+    <div class="bg-pine-teal" :class="$q.screen.lt.sm ? 'q-pa-sm' : 'q-pa-md'">
       <!-- indikator pisucich pouzivatelov -->
       <div
         v-if="chatStore.currentTypingUsers.length > 0"
@@ -208,7 +209,9 @@
           :placeholder="
             chatStore.currentUserStatus === 'Offline'
               ? 'Ste offline, správy nie je možné odosielať'
-              : 'Napis spravu alebo prikaz (napr. /join nazov, /invite @nick, /kick @nick, /revoke @nick, /quit, /cancel, /list)...'
+              : $q.screen.lt.sm
+                ? 'Napíš správu alebo príkaz...'
+                : 'Napis spravu alebo prikaz (napr. /join nazov, /invite @nick, /kick @nick, /revoke @nick, /quit, /cancel, /list)...'
           "
           class="col"
           @keyup.enter="handleSend"

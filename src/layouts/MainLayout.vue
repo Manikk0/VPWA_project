@@ -7,8 +7,9 @@
         <!-- tlacidlo na otvorenie laveho menu s kanalmi -->
         <q-btn flat round dense icon="menu" @click="leftDrawerOpen = !leftDrawerOpen" />
 
-        <!-- nazov aplikacie -->
-        <q-toolbar-title class="text-weight-bold">{{ APP_NAME }}</q-toolbar-title>
+        <!-- nazov aplikacie (na mobile skryty) -->
+        <q-toolbar-title class="text-weight-bold gt-xs">{{ APP_NAME }}</q-toolbar-title>
+        <q-space class="lt-sm" />
 
         <!-- profil prihlaseneho pouzivatela na pravej strane hornej listy -->
         <div class="row items-center q-gutter-sm">
@@ -85,6 +86,85 @@
             >
           </div>
 
+          <!-- tlacidlo s ikonou zvonceka pre zmeskane notifikacie -->
+          <q-btn flat dense round icon="notifications" size="md" class="text-dust-grey">
+            <q-badge
+              v-if="chatStore.unreadNotificationsCount > 0"
+              color="negative"
+              floating
+              rounded
+            >
+              {{ chatStore.unreadNotificationsCount }}
+            </q-badge>
+            <q-tooltip>Zmeškané upozornenia</q-tooltip>
+
+            <!-- vyskakovacie okno so zmeskanymi upozorneniami -->
+            <q-menu
+              @before-show="chatStore.markNotificationsAsRead()"
+              class="bg-pine-teal text-dust-grey shadow-4 rounded-borders"
+              style="min-width: 290px; max-width: 360px"
+            >
+              <div class="row items-center justify-between q-pa-sm bg-hunter-green">
+                <span class="text-weight-bold text-caption">ZMEŠKANÉ UPOZORNENIA</span>
+                <q-btn
+                  v-if="chatStore.missedNotifications.length > 0"
+                  flat
+                  dense
+                  no-caps
+                  size="xs"
+                  label="Vymazať všetko"
+                  class="text-dry-sage"
+                  @click="chatStore.clearMissedNotifications()"
+                />
+              </div>
+              <q-separator color="fern" />
+
+              <!-- oznam ak nie su ziadne zmeskane notifikacie -->
+              <div
+                v-if="chatStore.missedNotifications.length === 0"
+                class="q-pa-md text-center text-caption text-dry-sage"
+              >
+                Žiadne nové upozornenia
+              </div>
+
+              <!-- zoznam zmeskanych notifikacii -->
+              <q-list v-else dense class="q-py-xs" style="max-height: 300px; overflow-y: auto">
+                <q-item
+                  v-for="item in chatStore.missedNotifications"
+                  :key="item.id"
+                  class="q-my-xs rounded-borders"
+                >
+                  <q-item-section avatar style="min-width: 28px">
+                    <q-icon name="chat" size="xs" color="dry-sage" />
+                  </q-item-section>
+                  <q-item-section>
+                    <div class="row items-center justify-between text-caption text-weight-bold">
+                      <span>{{ item.sender }} v #{{ item.channelName }}</span>
+                      <span class="text-dry-sage" style="font-size: 10px">{{ item.time }}</span>
+                    </div>
+                    <div class="text-caption text-grey-4 ellipsis" style="max-width: 200px">
+                      {{ item.text }}
+                    </div>
+                  </q-item-section>
+                  <q-item-section side>
+                    <!-- tlacidlo na zmazanie jednotliveho upozornenia -->
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      icon="close"
+                      size="xs"
+                      color="dry-sage"
+                      @click.stop="chatStore.removeMissedNotification(item.id)"
+                    >
+                      <q-tooltip>Zmazať</q-tooltip>
+                    </q-btn>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+
           <!-- tlacidlo na odhlasenie -->
           <q-btn flat dense round icon="logout" @click="handleLogout" size="md">
             <q-tooltip>Odhlásiť sa</q-tooltip>
@@ -99,17 +179,26 @@
       show-if-above
       side="left"
       bordered
+      :width="$q.screen.lt.sm ? 190 : 300"
+      :style="$q.screen.lt.sm ? 'top: 50px; height: calc(100% - 50px)' : ''"
       class="bg-hunter-green text-dust-grey"
     >
-      <div class="q-pa-sm">
-        <div class="row items-center justify-between q-px-sm q-py-xs">
-          <span class="text-caption text-dry-sage text-weight-bold">KANALY</span>
+      <div :class="$q.screen.lt.sm ? 'q-pa-xs' : 'q-pa-sm'">
+        <div
+          class="row items-center justify-between"
+          :class="$q.screen.lt.sm ? 'q-px-xs q-py-xs' : 'q-px-sm q-py-xs'"
+        >
+          <span
+            class="text-caption text-dry-sage text-weight-bold"
+            :style="$q.screen.lt.sm ? 'font-size: 11px' : ''"
+            >KANÁLY</span
+          >
           <!-- tlacidlo na vytvorenie kanala cez dialog -->
           <q-btn
             flat
             dense
             round
-            size="sm"
+            :size="$q.screen.lt.sm ? 'xs' : 'sm'"
             icon="add"
             class="text-dry-sage"
             @click="openCreateDialog"
@@ -127,25 +216,32 @@
             v-ripple
             :active="ch.name === chatStore.activeChannelName"
             active-class="bg-fern text-dust-grey"
+            :class="$q.screen.lt.sm ? 'q-px-xs q-py-none' : ''"
+            :style="$q.screen.lt.sm ? 'min-height: 32px' : ''"
             @click="chatStore.selectChannel(ch.name)"
           >
-            <q-item-section avatar>
-              <q-icon :name="ch.isPrivate ? 'lock' : 'tag'" />
+            <q-item-section
+              avatar
+              :style="$q.screen.lt.sm ? 'min-width: 22px; padding-right: 6px' : ''"
+            >
+              <q-icon :name="ch.isPrivate ? 'lock' : 'tag'" :size="$q.screen.lt.sm ? 'xs' : 'sm'" />
             </q-item-section>
-            <q-item-section>
-              <div class="row items-center justify-between">
+            <q-item-section :class="{ ellipsis: $q.screen.lt.sm }">
+              <div class="row items-center justify-between" :class="{ 'no-wrap': $q.screen.lt.sm }">
                 <span
-                  :class="{
-                    'text-weight-bold text-white': chatStore.isChannelHighlighted(ch.name),
-                  }"
+                  :class="[
+                    $q.screen.lt.sm ? 'ellipsis text-caption' : '',
+                    { 'text-weight-bold text-white': chatStore.isChannelHighlighted(ch.name) },
+                  ]"
                 >
                   {{ ch.name }}
                 </span>
                 <!-- mala znacka ak je kanal zvyrazneny po pozvani -->
                 <q-badge
                   v-if="chatStore.isChannelHighlighted(ch.name)"
-                  label="Pozvánka"
+                  :label="$q.screen.lt.sm ? 'Nový' : 'Pozvánka'"
                   class="bg-dry-sage text-pine-teal q-ml-xs text-weight-bold"
+                  :style="$q.screen.lt.sm ? 'font-size: 9px; padding: 1px 3px' : ''"
                 />
               </div>
             </q-item-section>
@@ -159,35 +255,50 @@
       v-model="rightDrawerOpen"
       side="right"
       bordered
+      :width="$q.screen.lt.sm ? 190 : 300"
+      :style="$q.screen.lt.sm ? 'top: 50px; height: calc(100% - 50px)' : ''"
       class="bg-hunter-green text-dust-grey"
     >
-      <div class="q-pa-md bg-pine-teal text-weight-bold">
-        Clenovia kanala (#{{ chatStore.activeChannelName }})
+      <div
+        class="bg-pine-teal text-weight-bold"
+        :class="$q.screen.lt.sm ? 'q-pa-xs text-caption' : 'q-pa-md'"
+      >
+        {{
+          $q.screen.lt.sm
+            ? `Členovia (#${chatStore.activeChannelName})`
+            : `Clenovia kanala (#${chatStore.activeChannelName})`
+        }}
       </div>
       <q-separator color="fern" />
 
       <!-- zoznam clenov zo storu -->
-      <q-list dense class="q-pa-sm">
+      <q-list dense :class="$q.screen.lt.sm ? 'q-pa-xs' : 'q-pa-sm'">
         <q-item
           v-for="m in chatStore.activeChannel?.members || []"
           :key="m.name"
           clickable
           v-ripple
+          :class="$q.screen.lt.sm ? 'q-px-xs q-py-none' : ''"
+          :style="$q.screen.lt.sm ? 'min-height: 30px' : ''"
         >
           <!-- farebna bodka so stavom clena (Online, DND, Offline) -->
-          <q-item-section avatar style="min-width: 24px">
+          <q-item-section
+            avatar
+            :style="$q.screen.lt.sm ? 'min-width: 18px; padding-right: 4px' : 'min-width: 24px'"
+          >
             <q-badge rounded :color="statusColors[getUserStatus(m.name, chatStore.users)]" />
             <q-tooltip>{{ getUserStatus(m.name, chatStore.users) }}</q-tooltip>
           </q-item-section>
-          <q-item-section>
-            <div class="row items-center justify-between">
-              <span>{{ m.name }}</span>
+          <q-item-section :class="{ ellipsis: $q.screen.lt.sm }">
+            <div class="row items-center justify-between" :class="{ 'no-wrap': $q.screen.lt.sm }">
+              <span :class="$q.screen.lt.sm ? 'ellipsis text-caption' : ''">{{ m.name }}</span>
               <!-- stitok Admin ak je pouzivatel spravcom -->
               <q-badge
                 v-if="m.role === 'admin'"
                 color="fern"
                 text-color="dust-grey"
                 class="q-ml-xs"
+                :style="$q.screen.lt.sm ? 'font-size: 9px; padding: 1px 3px' : ''"
               >
                 Admin
               </q-badge>
@@ -197,8 +308,11 @@
                 color="negative"
                 text-color="white"
                 class="q-ml-xs"
+                :style="$q.screen.lt.sm ? 'font-size: 9px; padding: 1px 3px' : ''"
               >
-                Kick {{ getKickVotes(m.name) }}/3
+                {{
+                  $q.screen.lt.sm ? `${getKickVotes(m.name)}/3` : `Kick ${getKickVotes(m.name)}/3`
+                }}
               </q-badge>
             </div>
           </q-item-section>
@@ -207,13 +321,31 @@
 
       <!-- zoznam pouzivatelov s trvalym banom -->
       <template v-if="chatStore.activeChannel && chatStore.activeChannel.bannedUsers.length > 0">
-        <div class="q-px-md q-pt-md text-caption text-dry-sage text-weight-bold">ZABANOVANÍ</div>
-        <q-list dense class="q-pa-sm">
-          <q-item v-for="nick in chatStore.activeChannel.bannedUsers" :key="nick">
-            <q-item-section avatar style="min-width: 24px">
+        <div
+          class="text-caption text-dry-sage text-weight-bold"
+          :class="$q.screen.lt.sm ? 'q-px-sm q-pt-sm' : 'q-px-md q-pt-md'"
+          :style="$q.screen.lt.sm ? 'font-size: 11px' : ''"
+        >
+          ZABANOVANÍ
+        </div>
+        <q-list dense :class="$q.screen.lt.sm ? 'q-pa-xs' : 'q-pa-sm'">
+          <q-item
+            v-for="nick in chatStore.activeChannel.bannedUsers"
+            :key="nick"
+            :class="$q.screen.lt.sm ? 'q-px-xs' : ''"
+            :style="$q.screen.lt.sm ? 'min-height: 28px' : ''"
+          >
+            <q-item-section
+              avatar
+              :style="$q.screen.lt.sm ? 'min-width: 18px; padding-right: 4px' : 'min-width: 24px'"
+            >
               <q-icon name="block" size="xs" color="negative" />
             </q-item-section>
-            <q-item-section class="text-grey-5">{{ nick }}</q-item-section>
+            <q-item-section
+              class="text-grey-5"
+              :class="$q.screen.lt.sm ? 'ellipsis text-caption' : ''"
+              >{{ nick }}</q-item-section
+            >
           </q-item>
         </q-list>
       </template>
@@ -265,11 +397,12 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onUnmounted } from 'vue'
+import { ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { AppVisibility } from 'quasar'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
-import { getUserStatus } from '@/utils/helper_functions'
+import { getUserStatus, notifyInfo } from '@/utils/helper_functions'
 
 const router = useRouter()
 
@@ -281,6 +414,22 @@ function handleLogout() {
   chatStore.logout()
   router.push('/login')
 }
+
+// sledovanie navratu pouzivatela do aplikacie cez AppVisibility
+watch(
+  () => AppVisibility.appVisible,
+  (isVisible) => {
+    // ak sa pouzivatel vratil do aplikacie a ma neprecitane zmeskane notifikacie
+    if (isVisible && chatStore.unreadNotificationsCount > 0) {
+      const count = chatStore.unreadNotificationsCount
+      const text =
+        count === 1
+          ? 'Máte 1 nové zmeškané upozornenie'
+          : `Máte ${count} nových zmeškaných upozornení`
+      notifyInfo(text)
+    }
+  },
+)
 
 const leftDrawerOpen = ref(false)
 const rightDrawerOpen = ref(false)

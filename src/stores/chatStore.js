@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { Dialog } from 'quasar'
+import { Dialog, AppVisibility } from 'quasar'
 import { users, channels, messages } from '@/mockData'
 import {
   getCurrentTime,
@@ -8,7 +8,6 @@ import {
   notifySuccess,
   notifyError,
   notifyWarning,
-  notifyNewMessage,
   notifyInfo,
 } from '@/utils/helper_functions'
 
@@ -50,9 +49,17 @@ export const useChatStore = defineStore('chat', {
 
     // slovnik pre rozpisane texty sprav pouzivatelov { general: { ed: 'Ahoj...' } }
     typingDrafts: {},
+
+    // zoznam zmeskanych notifikacii prijatych pocas nepritomnosti pouzivatela
+    missedNotifications: [],
   }),
 
   getters: {
+    // vrati pocet neprecitanych zmeskanych notifikacii
+    unreadNotificationsCount: (state) => {
+      return state.missedNotifications.filter((n) => !n.isRead).length
+    },
+
     // vrati cele meno aktualne prihlaseneho pouzivatela
     currentUserName: (state) => {
       return get_name_from_nick(state.currentUser, state.users)
@@ -156,6 +163,24 @@ export const useChatStore = defineStore('chat', {
     // funkcia na odhlasenie pouzivatela
     logout() {
       this.currentUser = null
+      this.missedNotifications = []
+    },
+
+    // vymazanie vsetkych zmeskanych notifikacii
+    clearMissedNotifications() {
+      this.missedNotifications = []
+    },
+
+    // vymazanie jednej zmeskanej notifikacie podla id
+    removeMissedNotification(id) {
+      this.missedNotifications = this.missedNotifications.filter((n) => n.id !== id)
+    },
+
+    // oznacenie vsetkych zmeskanych notifikacii za precitane
+    markNotificationsAsRead() {
+      this.missedNotifications.forEach((n) => {
+        n.isRead = true
+      })
     },
 
     // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)
@@ -250,17 +275,23 @@ export const useChatStore = defineStore('chat', {
       // zvysime pocet viditelnych sprav, aby nova sprava nevytlacila najstarsiu z obrazovky
       this.increaseVisibleCount(channelName)
 
-      // upozornenie zobrazime iba ak je pouzivatel online
-      // a sprava prisla do ineho kanala, nez ktory ma prave otvoreny
-      if (this.currentUserStatus === 'Online' && channelName !== this.activeChannelName) {
+      // ak je pouzivatel online a aplikacia nie je v stave "visible" (AppVisibility) tak zaradime notifikaciu do zoznamu zmeskanych upozorneni
+      if (this.currentUserStatus === 'Online' && !AppVisibility.appVisible) {
+        let shouldQueue = true
         // ak ma pouzivatel zapnute notifikacie iba pre adresovane spravy, skontrolujeme ci sprava obsahuje jeho @nick
         if (this.currentUserOnlyMentions) {
-          const isMentioned = text.includes(`@${this.currentUser}`)
-          if (isMentioned) {
-            notifyNewMessage(channelName, sender, text)
-          }
-        } else {
-          notifyNewMessage(channelName, sender, text)
+          shouldQueue = text.includes(`@${this.currentUser}`)
+        }
+
+        if (shouldQueue) {
+          this.missedNotifications.push({
+            id: Date.now() + Math.random(),
+            channelName,
+            sender,
+            text,
+            time: getCurrentTime(),
+            isRead: false,
+          })
         }
       }
     },
