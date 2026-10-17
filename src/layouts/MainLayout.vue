@@ -79,91 +79,12 @@
           </q-btn>
 
           <!-- blok s menom prihlaseneho pouzivatela -->
-          <div class="column justify-center text-left leading-tight q-mr-xs">
+          <div class="column justify-center text-left leading-tight q-mr-xs gt-xs">
             <span class="text-weight-bold text-caption">{{ chatStore.currentUserName }}</span>
             <span class="text-caption text-dry-sage" style="font-size: 11px"
               >@{{ chatStore.currentUser }}</span
             >
           </div>
-
-          <!-- tlacidlo s ikonou zvonceka pre zmeskane notifikacie -->
-          <q-btn flat dense round icon="notifications" size="md" class="text-dust-grey">
-            <q-badge
-              v-if="chatStore.unreadNotificationsCount > 0"
-              color="negative"
-              floating
-              rounded
-            >
-              {{ chatStore.unreadNotificationsCount }}
-            </q-badge>
-            <q-tooltip>Zmeškané upozornenia</q-tooltip>
-
-            <!-- vyskakovacie okno so zmeskanymi upozorneniami -->
-            <q-menu
-              @before-show="chatStore.markNotificationsAsRead()"
-              class="bg-pine-teal text-dust-grey shadow-4 rounded-borders"
-              style="min-width: 290px; max-width: 360px"
-            >
-              <div class="row items-center justify-between q-pa-sm bg-hunter-green">
-                <span class="text-weight-bold text-caption">ZMEŠKANÉ UPOZORNENIA</span>
-                <q-btn
-                  v-if="chatStore.missedNotifications.length > 0"
-                  flat
-                  dense
-                  no-caps
-                  size="xs"
-                  label="Vymazať všetko"
-                  class="text-dry-sage"
-                  @click="chatStore.clearMissedNotifications()"
-                />
-              </div>
-              <q-separator color="fern" />
-
-              <!-- oznam ak nie su ziadne zmeskane notifikacie -->
-              <div
-                v-if="chatStore.missedNotifications.length === 0"
-                class="q-pa-md text-center text-caption text-dry-sage"
-              >
-                Žiadne nové upozornenia
-              </div>
-
-              <!-- zoznam zmeskanych notifikacii -->
-              <q-list v-else dense class="q-py-xs" style="max-height: 300px; overflow-y: auto">
-                <q-item
-                  v-for="item in chatStore.missedNotifications"
-                  :key="item.id"
-                  class="q-my-xs rounded-borders"
-                >
-                  <q-item-section avatar style="min-width: 28px">
-                    <q-icon name="chat" size="xs" color="dry-sage" />
-                  </q-item-section>
-                  <q-item-section>
-                    <div class="row items-center justify-between text-caption text-weight-bold">
-                      <span>{{ item.sender }} v #{{ item.channelName }}</span>
-                      <span class="text-dry-sage" style="font-size: 10px">{{ item.time }}</span>
-                    </div>
-                    <div class="text-caption text-grey-4 ellipsis" style="max-width: 200px">
-                      {{ item.text }}
-                    </div>
-                  </q-item-section>
-                  <q-item-section side>
-                    <!-- tlacidlo na zmazanie jednotliveho upozornenia -->
-                    <q-btn
-                      flat
-                      dense
-                      round
-                      icon="close"
-                      size="xs"
-                      color="dry-sage"
-                      @click.stop="chatStore.removeMissedNotification(item.id)"
-                    >
-                      <q-tooltip>Zmazať</q-tooltip>
-                    </q-btn>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-menu>
-          </q-btn>
 
           <!-- tlacidlo na odhlasenie -->
           <q-btn flat dense round icon="logout" @click="handleLogout" size="md">
@@ -218,7 +139,7 @@
             active-class="bg-fern text-dust-grey"
             :class="$q.screen.lt.sm ? 'q-px-xs q-py-none' : ''"
             :style="$q.screen.lt.sm ? 'min-height: 32px' : ''"
-            @click="chatStore.selectChannel(ch.name)"
+            @click="openChannel(ch.name)"
           >
             <q-item-section
               avatar
@@ -399,7 +320,7 @@
 <script setup>
 import { ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { AppVisibility } from 'quasar'
+import { AppVisibility, useQuasar } from 'quasar'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
 import { getUserStatus, notifyInfo } from '@/utils/helper_functions'
@@ -419,20 +340,42 @@ function handleLogout() {
 watch(
   () => AppVisibility.appVisible,
   (isVisible) => {
-    // ak sa pouzivatel vratil do aplikacie a ma neprecitane zmeskane notifikacie
-    if (isVisible && chatStore.unreadNotificationsCount > 0) {
-      const count = chatStore.unreadNotificationsCount
-      const text =
-        count === 1
-          ? 'Máte 1 nové zmeškané upozornenie'
-          : `Máte ${count} nových zmeškaných upozornení`
+    // ak sa pouzivatel vratil do aplikacie a medzitym mu prisli spravy, ukazeme popup s poctom
+    if (isVisible && chatStore.missedMessagesCount > 0) {
+      const count = chatStore.missedMessagesCount
+
+      // spravny tvar slova podla poctu
+      let text
+      if (count === 1) {
+        text = 'Kým ste boli preč, prišla vám 1 nová správa'
+      } else if (count <= 4) {
+        text = `Kým ste boli preč, prišli vám ${count} nové správy`
+      } else {
+        text = `Kým ste boli preč, prišlo vám ${count} nových správ`
+      }
       notifyInfo(text)
+
+      // pocet vynulujeme, aby sa popup pri dalsom navrate neukazoval znova
+      chatStore.missedMessagesCount = 0
     }
   },
 )
 
 const leftDrawerOpen = ref(false)
 const rightDrawerOpen = ref(false)
+
+// quasar objekt - pouzivame ho na zistenie velkosti obrazovky ($q.screen)
+const $q = useQuasar()
+
+// otvorenie kanala po kliknuti v lavom paneli
+function openChannel(channelName) {
+  chatStore.selectChannel(channelName)
+
+  // na mobile panel po vybere kanala zavrieme, aby neprekryval chat
+  if ($q.screen.xs) {
+    leftDrawerOpen.value = false
+  }
+}
 
 // poskytnutie funkcie pre potomkov na prepnutie praveho panela
 provide('toggleRightDrawer', () => {

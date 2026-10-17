@@ -9,6 +9,7 @@ import {
   notifyError,
   notifyWarning,
   notifyInfo,
+  showSystemNotification,
 } from '@/utils/helper_functions'
 
 // jednoduchy store pre spravu kanalov a pouzivatelov
@@ -50,16 +51,11 @@ export const useChatStore = defineStore('chat', {
     // slovnik pre rozpisane texty sprav pouzivatelov { general: { ed: 'Ahoj...' } }
     typingDrafts: {},
 
-    // zoznam zmeskanych notifikacii prijatych pocas nepritomnosti pouzivatela
-    missedNotifications: [],
+    // pocet sprav, o ktorych prisla notifikacia, kym aplikacia nebola viditelna
+    missedMessagesCount: 0,
   }),
 
   getters: {
-    // vrati pocet neprecitanych zmeskanych notifikacii
-    unreadNotificationsCount: (state) => {
-      return state.missedNotifications.filter((n) => !n.isRead).length
-    },
-
     // vrati cele meno aktualne prihlaseneho pouzivatela
     currentUserName: (state) => {
       return get_name_from_nick(state.currentUser, state.users)
@@ -81,20 +77,6 @@ export const useChatStore = defineStore('chat', {
       // ak pouzivatel nema nastavenie, berieme ze chce vsetky notifikacie
       if (!user || !user.onlyMentions) return false
       return true
-    },
-
-    // vrati sformatovany text pisucich pouzivatelov pre aktualne vybrany kanal
-    activeTypingText() {
-      const usersList = this.typingUsers[this.activeChannelName] || []
-      if (usersList.length === 0) return ''
-
-      if (usersList.length === 1) {
-        return `${usersList[0]} práve píše správu...`
-      } else if (usersList.length === 2) {
-        return `${usersList[0]}, ${usersList[1]} práve píšu správu...`
-      } else {
-        return 'Viacerí používatelia práve píšu správu...'
-      }
     },
 
     // vrati zoznam sprav pre aktualne vybrany kanal (podla poctu nacitanych sprav)
@@ -163,24 +145,8 @@ export const useChatStore = defineStore('chat', {
     // funkcia na odhlasenie pouzivatela
     logout() {
       this.currentUser = null
-      this.missedNotifications = []
-    },
-
-    // vymazanie vsetkych zmeskanych notifikacii
-    clearMissedNotifications() {
-      this.missedNotifications = []
-    },
-
-    // vymazanie jednej zmeskanej notifikacie podla id
-    removeMissedNotification(id) {
-      this.missedNotifications = this.missedNotifications.filter((n) => n.id !== id)
-    },
-
-    // oznacenie vsetkych zmeskanych notifikacii za precitane
-    markNotificationsAsRead() {
-      this.missedNotifications.forEach((n) => {
-        n.isRead = true
-      })
+      // po odhlaseni vynulujeme pocet zmeskanych sprav
+      this.missedMessagesCount = 0
     },
 
     // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)
@@ -275,23 +241,30 @@ export const useChatStore = defineStore('chat', {
       // zvysime pocet viditelnych sprav, aby nova sprava nevytlacila najstarsiu z obrazovky
       this.increaseVisibleCount(channelName)
 
-      // ak je pouzivatel online a aplikacia nie je v stave "visible" (AppVisibility) tak zaradime notifikaciu do zoznamu zmeskanych upozorneni
+      // notifikaciu vystavime iba ak je pouzivatel online (nie DND ani offline)
+      // a aplikacia nie je v stave "visible" (AppVisibility)
       if (this.currentUserStatus === 'Online' && !AppVisibility.appVisible) {
-        let shouldQueue = true
+        let shouldNotify = true
         // ak ma pouzivatel zapnute notifikacie iba pre adresovane spravy, skontrolujeme ci sprava obsahuje jeho @nick
         if (this.currentUserOnlyMentions) {
-          shouldQueue = text.includes(`@${this.currentUser}`)
+          shouldNotify = text.includes(`@${this.currentUser}`)
         }
 
-        if (shouldQueue) {
-          this.missedNotifications.push({
-            id: Date.now() + Math.random(),
-            channelName,
-            sender,
-            text,
-            time: getCurrentTime(),
-            isRead: false,
-          })
+        if (shouldNotify) {
+          // systemova notifikacia prehliadaca
+          const notification = showSystemNotification(channelName, sender, text)
+
+          // po kliknuti na notifikaciu sa vratime do aplikacie a otvorime kanal so spravou
+          if (notification) {
+            notification.onclick = () => {
+              window.focus()
+              this.selectChannel(channelName)
+              notification.close()
+            }
+          }
+
+          // zvysime pocet zmeskanych sprav
+          this.missedMessagesCount++
         }
       }
     },
@@ -331,12 +304,6 @@ export const useChatStore = defineStore('chat', {
         return false
       }
       return this.highlightedChannels[this.currentUser].includes(channelName)
-    },
-
-    // funkcia na rucnu zmenu poradia kanalov
-    updateChannelOrder(newOrder) {
-      if (!this.currentUser) return
-      this.userChannelOrders[this.currentUser] = newOrder
     },
 
     // prepne na prvy nezvyrazneny kanal pouzivatela, ak ziadny nezvyrazneny nema tak na prvy kanal

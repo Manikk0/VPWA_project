@@ -304,9 +304,8 @@ function showTypingDraft(nick) {
   })
 }
 
-// funkcia zisti ci je v sprave od ineho pouzivatela spomenuty aktualne prihlaseny pouzivatel so zavinacom
+// funkcia zisti ci je v sprave spomenuty aktualne prihlaseny pouzivatel so zavinacom
 function isMentioned(msg) {
-  if (msg.user === chatStore.currentUser) return false
   return msg.text.includes(`@${chatStore.currentUser}`)
 }
 

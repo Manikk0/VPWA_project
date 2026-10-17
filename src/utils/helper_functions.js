@@ -25,22 +25,36 @@ export function getUserStatus(nickname, usersList = users) {
   return user.status
 }
 
-// funkcia zobrazi upozornenie o novej sprave v inom kanali
-export function notifyNewMessage(channelName, sender, text) {
-  Notify.create({
-    color: 'white',
-    textColor: 'pine-teal',
-    icon: 'chat',
-    iconColor: 'hunter-green',
-    position: 'top',
-    classes: 'notify-message',
-    timeout: 6000,
-    progress: true,
-    // prvy riadok: kto a kam poslal spravu
-    message: `${sender} v #${channelName}`,
-    // druhy riadok: samotny text spravy
-    caption: text,
+// funkcia poziada prehliadac o povolenie zobrazovat systemove notifikacie
+export function askNotificationPermission() {
+  // niektore prehliadace notifikacie nepodporuju
+  if (!('Notification' in window)) return
+
+  // otazku zobrazime iba ak sa pouzivatel este nerozhodol
+  if (Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
+}
+
+// funkcia zobrazi systemovu notifikaciu prehliadaca o novej sprave
+// vrati objekt notifikacie, alebo null ak sa notifikacia zobrazit nedala
+export function showSystemNotification(channelName, sender, text) {
+  // prehliadac notifikacie nepodporuje alebo ich pouzivatel nepovolil
+  if (!('Notification' in window)) return null
+  if (Notification.permission !== 'granted') return null
+
+  // do notifikacie dame iba cast spravy (najviac 60 znakov)
+  let shortText = text
+  if (text.length > 60) {
+    shortText = text.slice(0, 60) + '...'
+  }
+
+  // nadpis: odosielatel a kanal, telo: cast spravy
+  const notification = new Notification(`${sender} v #${channelName}`, {
+    body: shortText,
+    icon: 'icons/favicon-128x128.png',
   })
+  return notification
 }
 
 // funkcia zobrazi kratku informacnu notifikaciu

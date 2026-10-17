@@ -125,7 +125,12 @@ import { useRouter } from 'vue-router'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
 import { users } from '@/mockData'
-import { notifySuccess, notifyError, notifyWarning } from '@/utils/helper_functions'
+import {
+  notifySuccess,
+  notifyError,
+  notifyWarning,
+  askNotificationPermission,
+} from '@/utils/helper_functions'
 
 const router = useRouter()
 const chatStore = useChatStore()
@@ -195,6 +200,8 @@ function handleSubmit() {
     chatStore.currentUser = newUser.nick
     // novy pouzivatel este nema ziadne kanaly, takze sa nastavi prazdny kanal
     chatStore.selectFirstChannel()
+    // poziadame prehliadac o povolenie systemovych notifikacii
+    askNotificationPermission()
 
     notifySuccess('Registrácia bola úspešná!')
 
@@ -231,6 +238,8 @@ function handleSubmit() {
   chatStore.currentUser = user.nick
   // po prihlaseni otvorime prvy kanal, v ktorom je pouzivatel clenom
   chatStore.selectFirstChannel()
+  // poziadame prehliadac o povolenie systemovych notifikacii
+  askNotificationPermission()
   router.push('/')
 }
 </script>
