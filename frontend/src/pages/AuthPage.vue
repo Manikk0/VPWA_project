@@ -88,12 +88,26 @@
             bg-color="white"
             outlined
             dense
-            placeholder="Zadajte heslo"
+            :placeholder="isRegisterMode ? 'Aspoň 8 znakov' : 'Zadajte heslo'"
             @keyup.enter="handleSubmit"
           />
         </div>
 
-        <!-- tlacidlo na prechod do aplikacie -->
+        <!-- pole pre zopakovanie hesla (iba pri registracii) -->
+        <div v-if="isRegisterMode">
+          <div class="text-caption text-weight-bold text-pine-teal q-mb-xs">Zopakujte heslo</div>
+          <q-input
+            v-model="passwordConfirmation"
+            type="password"
+            bg-color="white"
+            outlined
+            dense
+            placeholder="Zadajte heslo znova"
+            @keyup.enter="handleSubmit"
+          />
+        </div>
+
+        <!-- tlacidlo na prechod do aplikacie (pocas cakania na server ukazuje nacitavanie) -->
         <q-btn
           :label="isRegisterMode ? 'Zaregistrovať sa' : 'Prihlásiť sa'"
           color="pine-teal"
@@ -101,6 +115,7 @@
           class="full-width text-weight-bold q-mt-md"
           unelevated
           size="md"
+          :loading="loading"
           @click="handleSubmit"
         />
 
@@ -124,7 +139,6 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { APP_NAME } from '@/config/app'
 import { useChatStore } from '@/stores/chatStore'
-import { users } from '@/mockData'
 import {
   notifySuccess,
   notifyError,
@@ -137,15 +151,61 @@ const chatStore = useChatStore()
 
 const isRegisterMode = ref(false)
 
+// ci prave cakame na odpoved servera (tlacidlo ukazuje nacitavanie)
+const loading = ref(false)
+
 // hodnoty z formulara
 const firstName = ref('')
 const lastName = ref('')
 const nickname = ref('')
 const loginIdentifier = ref('')
 const password = ref('')
+const passwordConfirmation = ref('')
+
+// prelozi chybu zo servera
+function getErrorMessage(error) {
+  // server vobec neodpovedal
+  if (!error.response) {
+    return 'Server nie je dostupný.'
+  }
+
+  // server posiela chyby ako zoznam: { errors: [{ message, rule, field }] }
+  const errors = error.response.data.errors
+  if (!errors || errors.length === 0) {
+    return 'Nastala chyba, skúste to znova.'
+  }
+
+  // zobrazime prvu chybu zo zoznamu
+  const firstError = errors[0]
+
+  if (firstError.message === 'Invalid user credentials') {
+    return 'Nesprávny email/nickname alebo heslo!'
+  }
+  if (firstError.field === 'nickname' && firstError.rule === 'database.unique') {
+    return 'Používateľ s týmto nickom už existuje!'
+  }
+  if (firstError.field === 'email' && firstError.rule === 'database.unique') {
+    return 'Používateľ s týmto emailom už existuje!'
+  }
+  if (firstError.field === 'email') {
+    return 'Zadajte platný email!'
+  }
+  if (firstError.field === 'password' && firstError.rule === 'minLength') {
+    return 'Heslo musí mať aspoň 8 znakov!'
+  }
+  if (firstError.field === 'password' && firstError.rule === 'maxLength') {
+    return 'Heslo môže mať najviac 32 znakov!'
+  }
+  if (firstError.field === 'passwordConfirmation') {
+    return 'Heslá sa nezhodujú!'
+  }
+
+  // inu chybu zobrazime tak, ako ju poslal server
+  return firstError.message
+}
 
 // funkcia na spracovanie prihlasenia / registracie
-function handleSubmit() {
+async function handleSubmit() {
   if (isRegisterMode.value) {
     // kontrola ci pouzivatel vyplnil vsetky polia
     if (
@@ -153,58 +213,34 @@ function handleSubmit() {
       !lastName.value ||
       !nickname.value ||
       !loginIdentifier.value ||
-      !password.value
+      !password.value ||
+      !passwordConfirmation.value
     ) {
       notifyWarning('Vyplňte prosím všetky polia!')
       return
     }
 
-    const cleanNick = nickname.value.trim().toLowerCase()
-    const cleanEmail = loginIdentifier.value.trim().toLowerCase()
-
-    // kontrola ci zadany email je validny (obsahuje @, bodku a ma aspon 5 znakov)
-    if (!cleanEmail.includes('@') || !cleanEmail.includes('.') || cleanEmail.length < 5) {
-      notifyError('Zadajte platný email!')
+    loading.value = true
+    try {
+      // server skontroluje udaje (unikatny nick a email, dlzka hesla...) a ulozi pouzivatela
+      await chatStore.register({
+        firstName: firstName.value.trim(),
+        lastName: lastName.value.trim(),
+        nickname: nickname.value.trim(),
+        email: loginIdentifier.value.trim(),
+        password: password.value,
+        passwordConfirmation: passwordConfirmation.value,
+      })
+    } catch (error) {
+      notifyError(getErrorMessage(error))
+      loading.value = false
       return
     }
+    loading.value = false
 
-    // kontrola ci uz nahodou pouzivatel s takym nickom existuje
-    if (chatStore.users.find((u) => u.nick.toLowerCase() === cleanNick)) {
-      notifyError('Používateľ s týmto nickom už existuje!')
-      return
-    }
-
-    // kontrola ci uz nahodou pouzivatel s takym emailom existuje
-    if (chatStore.users.find((u) => u.email.toLowerCase() === cleanEmail)) {
-      notifyError('Používateľ s týmto emailom už existuje!')
-      return
-    }
-
-    // vytvorenie objektu noveho pouzivatela
-    const newUser = {
-      name: `${firstName.value.trim()} ${lastName.value.trim()}`,
-      nick: nickname.value.trim(),
-      email: loginIdentifier.value.trim(),
-      password: password.value,
-      // novy pouzivatel je predvolene online
-      status: 'Online',
-      // novy pouzivatel dostava notifikacie pre vsetky spravy
-      onlyMentions: false,
-    }
-
-    // pridanie noveho pouzivatela do zoznamov v store
-    chatStore.users.push(newUser)
-    chatStore.allUsers.push(newUser.nick)
-
-    // nastavenie prihlaseneho pouzivatela a presmerovanie na hlavnu stranku
-    chatStore.currentUser = newUser.nick
-    // novy pouzivatel este nema ziadne kanaly, takze sa nastavi prazdny kanal
-    chatStore.selectFirstChannel()
     // poziadame prehliadac o povolenie systemovych notifikacii
     askNotificationPermission()
-
     notifySuccess('Registrácia bola úspešná!')
-
     router.push('/')
     return
   }
@@ -216,28 +252,17 @@ function handleSubmit() {
     return
   }
 
-  const input = loginIdentifier.value.trim().toLowerCase()
-
-  // zistenie ci pouzivatel s takym emailom alebo nickom existuje
-  const user = (chatStore.users || users).find(
-    (u) => u.email.toLowerCase() === input || u.nick.toLowerCase() === input,
-  )
-
-  if (!user) {
-    notifyError('Používateľ s týmto emailom alebo nickom neexistuje!')
+  loading.value = true
+  try {
+    // server najde pouzivatela podla emailu alebo nicku a overi heslo
+    await chatStore.login(loginIdentifier.value.trim(), password.value)
+  } catch (error) {
+    notifyError(getErrorMessage(error))
+    loading.value = false
     return
   }
+  loading.value = false
 
-  // overenie spravnosti hesla
-  if (user.password !== password.value) {
-    notifyError('Nesprávne heslo!')
-    return
-  }
-
-  // ak je vsetko v poriadku tak ulozime pouzivatela a presmerujeme do aplikacie
-  chatStore.currentUser = user.nick
-  // po prihlaseni otvorime prvy kanal, v ktorom je pouzivatel clenom
-  chatStore.selectFirstChannel()
   // poziadame prehliadac o povolenie systemovych notifikacii
   askNotificationPermission()
   router.push('/')

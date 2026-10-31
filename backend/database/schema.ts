@@ -32,19 +32,78 @@ export class AuthAccessTokenSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class ChannelMemberSchema extends BaseModel {
+  static $columns = ['channelId', 'isHighlighted', 'joinedAt', 'userId'] as const
+  $columns = ChannelMemberSchema.$columns
+  @column({ isPrimary: true })
+  declare channelId: number
+  @column()
+  declare isHighlighted: boolean
+  @column.dateTime()
+  declare joinedAt: DateTime
+  @column()
+  declare userId: number
+}
+
+export class ChannelSchema extends BaseModel {
+  static $columns = ['createdAt', 'createdBy', 'description', 'id', 'lastActivityAt', 'name', 'type', 'updatedAt'] as const
+  $columns = ChannelSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: number
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime()
+  declare lastActivityAt: DateTime
+  @column()
+  declare name: string
+  @column()
+  declare type: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class MessageSchema extends BaseModel {
+  static $columns = ['channelId', 'content', 'createdAt', 'id', 'senderId', 'updatedAt'] as const
+  $columns = MessageSchema.$columns
+  @column()
+  declare channelId: number
+  @column()
+  declare content: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare senderId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class UserSchema extends BaseModel {
-  static $columns = ['createdAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
+  static $columns = ['createdAt', 'email', 'firstName', 'id', 'lastName', 'nickname', 'notifyOnlyMentions', 'password', 'status', 'updatedAt'] as const
   $columns = UserSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
   declare email: string
   @column()
-  declare fullName: string | null
+  declare firstName: string
   @column({ isPrimary: true })
   declare id: number
+  @column()
+  declare lastName: string
+  @column()
+  declare nickname: string
+  @column()
+  declare notifyOnlyMentions: boolean
   @column({ serializeAs: null })
   declare password: string
+  @column()
+  declare status: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 }

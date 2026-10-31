@@ -330,9 +330,9 @@ const router = useRouter()
 // nacitanie storu pre chat
 const chatStore = useChatStore()
 
-// funkcia na odhlasenie pouzivatela
-function handleLogout() {
-  chatStore.logout()
+// funkcia na odhlasenie pouzivatela (token sa zrusi aj na serveri)
+async function handleLogout() {
+  await chatStore.logout()
   router.push('/login')
 }
 

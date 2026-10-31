@@ -11,6 +11,9 @@ import {
   notifyInfo,
   showSystemNotification,
 } from '@/utils/helper_functions'
+import { api } from '@/boot/axios'
+
+const statusNames = { online: 'Online', dnd: 'DND', offline: 'Offline' }
 
 // jednoduchy store pre spravu kanalov a pouzivatelov
 export const useChatStore = defineStore('chat', {
@@ -142,11 +145,74 @@ export const useChatStore = defineStore('chat', {
   },
 
   actions: {
-    // funkcia na odhlasenie pouzivatela
-    logout() {
+    // registracia noveho pouzivatela - udaje sa ulozia do databazy
+    // pri chybe (napr. nickname uz existuje) server vrati chybu a funkcia ju posunie dalej do AuthPage
+    async register(form) {
+      const response = await api.post('/auth/signup', form)
+      // server vrati { data: { user, token } }
+      this.setLoggedUser(response.data.data.user, response.data.data.token)
+    },
+
+    // prihlasenie - login moze byt email alebo nickname
+    async login(login, password) {
+      const response = await api.post('/auth/login', { login: login, password: password })
+      this.setLoggedUser(response.data.data.user, response.data.data.token)
+    },
+
+    // obnovenie prihlasenia po obnoveni stranky (ak mame ulozeny token)
+    // vrati true ak je pouzivatel stale prihlaseny, inak false
+    async restoreSession() {
+      const token = localStorage.getItem('token')
+      if (!token) return false
+
+      try {
+        // server podla tokenu vrati udaje prihlaseneho pouzivatela
+        const response = await api.get('/account/profile')
+        this.setLoggedUser(response.data.data, null)
+        return true
+      } catch {
+        // token uz neplati (alebo server nebezi) - zmazeme ho
+        localStorage.removeItem('token')
+        return false
+      }
+    },
+
+    // odhlasenie - token sa zrusi na serveri aj v prehliadaci
+    async logout() {
+      try {
+        await api.post('/account/logout')
+      } catch {
+        // aj ked sa odhlasenie na serveri nepodari, v prehliadaci pouzivatela odhlasime
+      }
+      localStorage.removeItem('token')
       this.currentUser = null
       // po odhlaseni vynulujeme pocet zmeskanych sprav
       this.missedMessagesCount = 0
+    },
+
+    // ulozenie prihlaseneho pouzivatela do store
+    setLoggedUser(user, token) {
+      // token si ulozime do prehliadaca, aby pouzivatel ostal prihlaseny aj po obnoveni stranky
+      if (token) {
+        localStorage.setItem('token', token)
+      }
+
+      this.currentUser = user.nickname
+
+      // docasne kanaly a spravy su zatial z mockData.js, ktore pracuju so zoznamom this.users
+      // preto pouzivatela zo servera pridame / aktualizujeme aj v tomto zozname
+      let existingUser = this.users.find((u) => u.nick === user.nickname)
+      if (!existingUser) {
+        existingUser = { nick: user.nickname }
+        this.users.push(existingUser)
+        this.allUsers.push(user.nickname)
+      }
+      existingUser.name = `${user.firstName} ${user.lastName}`
+      existingUser.status = statusNames[user.status]
+      existingUser.onlyMentions = user.notifyOnlyMentions
+
+      // otvorime prvy kanal pouzivatela
+      this.selectFirstChannel()
     },
 
     // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)

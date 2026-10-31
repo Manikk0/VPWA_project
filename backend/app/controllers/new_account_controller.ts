@@ -5,9 +5,14 @@ import UserTransformer from '#transformers/user_transformer'
 
 export default class NewAccountController {
   async store({ request, serialize }: HttpContext) {
-    const { fullName, email, password } = await request.validateUsing(signupValidator)
+    // overenie udajov z registracneho formulara
+    const { firstName, lastName, nickname, email, password } =
+      await request.validateUsing(signupValidator)
 
-    const user = await User.create({ fullName, email, password })
+    // vytvorenie pouzivatela (heslo sa hashuje)
+    const user = await User.create({ firstName, lastName, nickname, email, password })
+    // nacitame pouzivatela znova z databazy, aby mal aj predvolene hodnoty (status, notifyOnlyMentions)
+    await user.refresh()
     const token = await User.accessTokens.create(user)
 
     return serialize({

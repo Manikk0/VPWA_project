@@ -5,9 +5,11 @@ import UserTransformer from '#transformers/user_transformer'
 
 export default class AccessTokensController {
   async store({ request, serialize }: HttpContext) {
-    const { email, password } = await request.validateUsing(loginValidator)
+    // login = email alebo nickname
+    const { login, password } = await request.validateUsing(loginValidator)
 
-    const user = await User.verifyCredentials(email, password)
+    // najde pouzivatela podla emailu alebo nicku a overi heslo (pri chybe vrati 400)
+    const user = await User.verifyCredentials(login, password)
     const token = await User.accessTokens.create(user)
 
     return serialize({

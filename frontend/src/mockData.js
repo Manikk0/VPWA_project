@@ -1,50 +1,39 @@
-// registrovani pouzivatelia aplikacie
+// docasne pouzivatelia pre kanaly a spravy z prototypu
+// po prihlaseni sa udaje prihlaseneho pouzivatela aktualizuju zo servera
 // status moze byt 'Online', 'DND' alebo 'Offline'
 // onlyMentions = true znamena, ze pouzivatel chce notifikacie iba pre spravy s jeho @nick
 export const users = [
   {
-    email: 'user@test.sk',
-    password: '123',
     nick: 'juro',
     name: 'Juraj Metlicka',
     status: 'Online',
     onlyMentions: false,
   },
   {
-    email: 'jozef@test.sk',
-    password: '123',
     nick: 'jozef',
     name: 'Jozef Mrkvicka',
     status: 'Online',
     onlyMentions: false,
   },
   {
-    email: 'ed@test.sk',
-    password: '123',
     nick: 'ed',
     name: 'Ed Tester',
     status: 'DND',
     onlyMentions: false,
   },
   {
-    email: 'mara@test.sk',
-    password: '123',
     nick: 'mara',
     name: 'Maria Kovacova',
     status: 'Online',
     onlyMentions: true,
   },
   {
-    email: 'peto@test.sk',
-    password: '123',
     nick: 'peto',
     name: 'Peter Novak',
     status: 'Offline',
     onlyMentions: false,
   },
   {
-    email: 'zuzka@test.sk',
-    password: '123',
     nick: 'zuzka',
     name: 'Zuzana Hraskova',
     status: 'Online',

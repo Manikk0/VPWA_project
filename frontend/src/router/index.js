@@ -36,18 +36,26 @@ export default defineRouter(({ store }) => {
   })
 
   // navigacna kontrola pre overenie prihlasenia pouzivatela
-  Router.beforeEach((to, from, next) => {
+  Router.beforeEach(async (to) => {
     const chatStore = useChatStore(store)
+
+    // po obnoveni stranky nevieme, kto je prihlaseny - ak mame ulozeny token, opytame sa servera
+    if (!chatStore.currentUser && localStorage.getItem('token')) {
+      await chatStore.restoreSession()
+    }
 
     // ak pouzivatel nie je prihlaseny a nejde na prihlasovaciu stranku, presmerujeme na /login
     if (!chatStore.currentUser && to.path !== '/login') {
-      next('/login')
-    } else if (chatStore.currentUser && to.path === '/login') {
-      // ak je pouzivatel uz prihlaseny a ide na /login, presmerujeme na hlavnu stranku
-      next('/')
-    } else {
-      next()
+      return '/login'
     }
+
+    // ak je pouzivatel uz prihlaseny a ide na /login, presmerujeme na hlavnu stranku
+    if (chatStore.currentUser && to.path === '/login') {
+      return '/'
+    }
+
+    // inak moze ist na stranku, kam chcel
+    return true
   })
 
   return Router
