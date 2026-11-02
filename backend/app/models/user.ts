@@ -9,7 +9,7 @@ import Channel from '#models/channel'
 import Message from '#models/message'
 
 // model pouzivatela - stlpce su v UserSchema
-// pri prihlaseni sa pouzivatel hlada podla emailu alebo podla prezyvky (nickname)
+// pri prihlaseni sa pouzivatel hlada podla emailu alebo podla nicknamu
 export default class User extends compose(
   UserSchema,
   withAuthFinder(hash, { uids: ['email', 'nickname'], passwordColumnName: 'password' })
@@ -17,11 +17,11 @@ export default class User extends compose(
   static accessTokens = DbAccessTokensProvider.forModel(User)
   declare currentAccessToken?: AccessToken
 
-  // kanaly, ktore pouzivatel vytvoril (je ich spravcom)
+  // kanaly, ktorych spravcom je pouzivatel
   @hasMany(() => Channel, { foreignKey: 'createdBy' })
   declare createdChannels: HasMany<typeof Channel>
 
-  // kanaly, v ktorych je pouzivatel clenom (cez tabulku channel_members)
+  // kanaly, v ktorych je pouzivatel clenom
   @manyToMany(() => Channel, {
     pivotTable: 'channel_members',
     pivotForeignKey: 'user_id',
@@ -30,9 +30,22 @@ export default class User extends compose(
   })
   declare channels: ManyToMany<typeof Channel>
 
+  // kanaly, v ktorych ma pouzivatel trvaly ban
+  @manyToMany(() => Channel, {
+    pivotTable: 'channel_bans',
+    pivotForeignKey: 'user_id',
+    pivotRelatedForeignKey: 'channel_id',
+  })
+  declare bannedChannels: ManyToMany<typeof Channel>
+
   // spravy, ktore pouzivatel poslal
   @hasMany(() => Message, { foreignKey: 'senderId' })
   declare messages: HasMany<typeof Message>
+
+  // pomocny getter pre spatnu kompatibilitu s frontendom
+  get notifyOnlyMentions() {
+    return this.notificationPref === 'mentions_only'
+  }
 
   // inicialy z mena a priezviska
   get initials() {

@@ -32,6 +32,18 @@ const routes = {
     tokens: [[0,"api"],[0,"v1"],[0,"account"],[0,"logout"]],
     types: placeholder as Registry['profile.access_tokens.destroy']['types'],
   },
+  'channels.channels.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/channels',
+    tokens: [[0,"api"],[0,"v1"],[0,"channels"]],
+    types: placeholder as Registry['channels.channels.index']['types'],
+  },
+  'channels.channels.join': {
+    methods: ["POST"],
+    pattern: '/api/v1/channels/join',
+    tokens: [[0,"api"],[0,"v1"],[0,"channels"],[0,"join"]],
+    types: placeholder as Registry['channels.channels.join']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

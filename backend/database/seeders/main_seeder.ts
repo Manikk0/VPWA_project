@@ -3,6 +3,9 @@ import { DateTime } from 'luxon'
 import User from '#models/user'
 import Channel from '#models/channel'
 import Message from '#models/message'
+import ChannelBan from '#models/channel_ban'
+import KickVote from '#models/kick_vote'
+import MessageMention from '#models/message_mention'
 
 // testovacie data
 // spustenie: node ace migration:fresh --seed (zmaze vsetky tabulky, vytvori ich znova a naplni datami)
@@ -11,6 +14,7 @@ import Message from '#models/message'
 const TEST_PASSWORD = 'heslo123'
 
 // testovaci pouzivatelia
+// notificationPref moze byt 'all', 'mentions_only' alebo 'none'
 const users = [
   {
     firstName: 'Juraj',
@@ -18,7 +22,7 @@ const users = [
     nickname: 'juro',
     email: 'juro@test.sk',
     status: 'online',
-    notifyOnlyMentions: false,
+    notificationPref: 'all' as const,
   },
   {
     firstName: 'Jozef',
@@ -26,7 +30,7 @@ const users = [
     nickname: 'jozef',
     email: 'jozef@test.sk',
     status: 'online',
-    notifyOnlyMentions: false,
+    notificationPref: 'all' as const,
   },
   {
     firstName: 'Ed',
@@ -34,7 +38,7 @@ const users = [
     nickname: 'ed',
     email: 'ed@test.sk',
     status: 'dnd',
-    notifyOnlyMentions: false,
+    notificationPref: 'all' as const,
   },
   {
     firstName: 'Maria',
@@ -42,7 +46,7 @@ const users = [
     nickname: 'mara',
     email: 'mara@test.sk',
     status: 'online',
-    notifyOnlyMentions: true,
+    notificationPref: 'mentions_only' as const,
   },
   {
     firstName: 'Peter',
@@ -50,7 +54,7 @@ const users = [
     nickname: 'peto',
     email: 'peto@test.sk',
     status: 'offline',
-    notifyOnlyMentions: false,
+    notificationPref: 'all' as const,
   },
   {
     firstName: 'Zuzana',
@@ -58,7 +62,7 @@ const users = [
     nickname: 'zuzka',
     email: 'zuzka@test.sk',
     status: 'online',
-    notifyOnlyMentions: false,
+    notificationPref: 'all' as const,
   },
 ]
 
@@ -70,6 +74,11 @@ const channels = [
     description: 'Vseobecny kanal pre novinky a pokec.',
     createdBy: 'juro',
     members: ['juro', 'jozef', 'ed', 'mara', 'peto', 'zuzka'],
+    kickVotes: [
+      { target: 'ed', votedBy: 'jozef' },
+      { target: 'ed', votedBy: 'mara' },
+    ],
+    bannedUsers: [] as string[],
   },
   {
     name: 'test1',
@@ -77,6 +86,8 @@ const channels = [
     description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
     createdBy: 'juro',
     members: ['juro', 'ed'],
+    kickVotes: [] as { target: string; votedBy: string }[],
+    bannedUsers: [] as string[],
   },
   {
     name: 'test2',
@@ -84,6 +95,8 @@ const channels = [
     description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
     createdBy: 'jozef',
     members: ['jozef', 'juro'],
+    kickVotes: [] as { target: string; votedBy: string }[],
+    bannedUsers: [] as string[],
   },
   {
     name: 'programovanie',
@@ -91,6 +104,8 @@ const channels = [
     description: 'Debaty o kode, chybach a skole.',
     createdBy: 'ed',
     members: ['ed', 'mara', 'peto'],
+    kickVotes: [] as { target: string; votedBy: string }[],
+    bannedUsers: [] as string[],
   },
   {
     name: 'tajne',
@@ -98,6 +113,8 @@ const channels = [
     description: 'Sukromny kanal len pre pozvanych.',
     createdBy: 'mara',
     members: ['mara', 'zuzka'],
+    kickVotes: [] as { target: string; votedBy: string }[],
+    bannedUsers: [] as string[],
   },
   {
     name: 'random',
@@ -105,6 +122,8 @@ const channels = [
     description: 'Hocico, co sa nehodi inam.',
     createdBy: 'peto',
     members: ['peto', 'juro', 'jozef', 'zuzka'],
+    kickVotes: [] as { target: string; votedBy: string }[],
+    bannedUsers: ['ed'],
   },
 ]
 
@@ -169,7 +188,7 @@ export default class extends BaseSeeder {
       usersByNick[data.nickname] = user
     }
 
-    // 2. kanaly, ich clenovia a spravy
+    // 2. kanaly, ich clenovia, bany, hlasy a spravy
     for (const data of channels) {
       const channelMessages = messages[data.name as keyof typeof messages]
 
@@ -197,14 +216,41 @@ export default class extends BaseSeeder {
         })
       }
 
-      // spravy kanala
+      // zabanovani pouzivatelia - zapis do tabulky channel_bans
+      for (const nick of data.bannedUsers) {
+        await ChannelBan.create({
+          channelId: channel.id,
+          userId: usersByNick[nick].id,
+        })
+      }
+
+      // hlasy clenov za vyhodenie pouzivatela - zapis do tabulky kick_votes
+      for (const vote of data.kickVotes) {
+        await KickVote.create({
+          channelId: channel.id,
+          targetUserId: usersByNick[vote.target].id,
+          votedByUserId: usersByNick[vote.votedBy].id,
+        })
+      }
+
+      // spravy kanala a spomenutia @
       for (const message of channelMessages) {
-        await Message.create({
+        const createdMessage = await Message.create({
           channelId: channel.id,
           senderId: usersByNick[message.user].id,
           content: message.text,
           createdAt: yesterdayAt(message.time),
         })
+
+        // ak text spravy obsahuje @nickname pouzivatela, vytvorime zaznam v message_mentions
+        for (const [nick, userObj] of Object.entries(usersByNick)) {
+          if (message.text.includes(`@${nick}`)) {
+            await MessageMention.create({
+              messageId: createdMessage.id,
+              mentionedUserId: userObj.id,
+            })
+          }
+        }
       }
     }
   }

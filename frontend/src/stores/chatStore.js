@@ -150,13 +150,13 @@ export const useChatStore = defineStore('chat', {
     async register(form) {
       const response = await api.post('/auth/signup', form)
       // server vrati { data: { user, token } }
-      this.setLoggedUser(response.data.data.user, response.data.data.token)
+      await this.setLoggedUser(response.data.data.user, response.data.data.token)
     },
 
     // prihlasenie - login moze byt email alebo nickname
     async login(login, password) {
       const response = await api.post('/auth/login', { login: login, password: password })
-      this.setLoggedUser(response.data.data.user, response.data.data.token)
+      await this.setLoggedUser(response.data.data.user, response.data.data.token)
     },
 
     // obnovenie prihlasenia po obnoveni stranky (ak mame ulozeny token)
@@ -168,7 +168,7 @@ export const useChatStore = defineStore('chat', {
       try {
         // server podla tokenu vrati udaje prihlaseneho pouzivatela
         const response = await api.get('/account/profile')
-        this.setLoggedUser(response.data.data, null)
+        await this.setLoggedUser(response.data.data, null)
         return true
       } catch {
         // token uz neplati (alebo server nebezi) - zmazeme ho
@@ -186,12 +186,31 @@ export const useChatStore = defineStore('chat', {
       }
       localStorage.removeItem('token')
       this.currentUser = null
+      // po odhlaseni vycistime zoznam kanalov
+      this.channels = []
       // po odhlaseni vynulujeme pocet zmeskanych sprav
       this.missedMessagesCount = 0
     },
 
+    // nacitanie zoznamu kanalov prihlaseneho pouzivatela zo servera
+    async fetchChannels() {
+      try {
+        const response = await api.get('/channels')
+        // server vrati zoznam kanalov, v ktorych je prihlaseny pouzivatel clenom
+        this.channels = response.data
+
+        // ak aktualne vybrany kanal uz neexistuje medzi kanalmi pouzivatela, prepneme na prvy
+        const stillInActive = this.channels.some((c) => c.name === this.activeChannelName)
+        if (!stillInActive) {
+          this.selectFirstChannel()
+        }
+      } catch {
+        notifyError('Nepodarilo sa načítať kanály zo servera')
+      }
+    },
+
     // ulozenie prihlaseneho pouzivatela do store
-    setLoggedUser(user, token) {
+    async setLoggedUser(user, token) {
       // token si ulozime do prehliadaca, aby pouzivatel ostal prihlaseny aj po obnoveni stranky
       if (token) {
         localStorage.setItem('token', token)
@@ -211,8 +230,8 @@ export const useChatStore = defineStore('chat', {
       existingUser.status = statusNames[user.status]
       existingUser.onlyMentions = user.notifyOnlyMentions
 
-      // otvorime prvy kanal pouzivatela
-      this.selectFirstChannel()
+      // nacitame aktualne kanaly pouzivatela zo servera
+      await this.fetchChannels()
     },
 
     // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)
@@ -389,7 +408,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // vytvorenie alebo pridanie sa do kanala cez /join
-    joinChannel(channelName, isPrivate = false) {
+    async joinChannel(channelName, isPrivate = false) {
       // ocistenie nazvu kanala od mriezky a medzier
       const cleanName = channelName.replace('#', '').trim()
 
@@ -398,57 +417,33 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      // kontrola ci kanal s takym menom uz existuje
-      const existingChannel = this.channels.find((c) => c.name === cleanName)
-
-      if (existingChannel) {
-        // kanal uz existuje - zistime ci v nom pouzivatel uz je
-        const isMember = existingChannel.members.some((m) => m.name === this.currentUser)
-
-        if (isMember) {
-          // pouzivatel uz je clenom, iba ho prepneme do kanala
-          this.selectChannel(cleanName)
-          notifyInfo(`Už ste členom kanála #${cleanName}`)
-          return
-        }
-
-        // pouzivatel s trvalym banom sa do kanala nemoze vratit
-        if (existingChannel.bannedUsers.includes(this.currentUser)) {
-          notifyError(`V kanáli #${cleanName} máte trvalý ban, vrátiť vás môže iba správca`)
-          return
-        }
-
-        // do sukromneho kanala sa neda pridat cez /join, pridat moze iba spravca cez /invite
-        if (existingChannel.isPrivate) {
-          notifyError(`Kanál #${cleanName} je súkromný, pridať vás môže iba jeho správca`)
-          return
-        }
-
-        // verejny kanal - pridame pouzivatela medzi clenov a prepneme ho don
-        existingChannel.members.push({ name: this.currentUser, role: 'member' })
-        this.selectChannel(cleanName)
-        notifySuccess(`Pridali ste sa do kanála #${cleanName}`)
-      } else {
-        // novy kanal
-        const newChannel = {
+      try {
+        // odosleme poziadavku na server s nazvom a typom kanala (public alebo private)
+        const response = await api.post('/channels/join', {
           name: cleanName,
-          isPrivate: Boolean(isPrivate),
-          createdBy: this.currentUser,
-          description: '',
-          members: [{ name: this.currentUser, role: 'admin' }],
-          bannedUsers: [],
-          kickVotes: {},
-        }
-        this.channels.push(newChannel)
-        this.activeChannelName = cleanName
+          type: isPrivate ? 'private' : 'public',
+        })
 
-        // inicializacia prazdneho zoznamu sprav pre novovytvoreny kanal
+        // po uspesnom pridani alebo vytvoreni znovu nacitame kanaly zo servera
+        await this.fetchChannels()
+
+        // prepneme sa do pripojeneho alebo vytvoreneho kanala
+        this.selectChannel(cleanName)
+
+        // inicializacia prazdneho zoznamu sprav pre novovytvoreny kanal ak este neexistuje
         if (!this.messages[cleanName]) {
           this.messages[cleanName] = []
         }
 
-        const typText = isPrivate ? 'sukromny' : 'verejny'
-        notifySuccess(`Vytvoreny novy ${typText} kanal #${cleanName}`)
+        if (response.data.alreadyMember) {
+          notifyInfo(response.data.message)
+        } else {
+          notifySuccess(response.data.message)
+        }
+      } catch (error) {
+        // server vrati 403 ak je kanal sukromny alebo ma pouzivatel ban
+        const message = error.response?.data?.message || 'Nepodarilo sa pripojiť do kanála'
+        notifyError(message)
       }
     },
 

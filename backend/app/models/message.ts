@@ -1,6 +1,6 @@
 import { MessageSchema } from '#database/schema'
-import { belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import { belongsTo, manyToMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, ManyToMany } from '@adonisjs/lucid/types/relations'
 import Channel from '#models/channel'
 import User from '#models/user'
 
@@ -13,4 +13,12 @@ export default class Message extends MessageSchema {
   // odosielatel spravy
   @belongsTo(() => User, { foreignKey: 'senderId' })
   declare sender: BelongsTo<typeof User>
+
+  // oznaceni pouzivatelia v tejto sprave
+  @manyToMany(() => User, {
+    pivotTable: 'message_mentions',
+    pivotForeignKey: 'message_id',
+    pivotRelatedForeignKey: 'mentioned_user_id',
+  })
+  declare mentions: ManyToMany<typeof User>
 }

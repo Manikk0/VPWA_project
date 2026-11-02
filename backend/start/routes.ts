@@ -33,5 +33,15 @@ router
       .prefix('account')
       .as('profile')
       .use(middleware.auth())
+
+    // kanaly prihlaseneho pouzivatela
+    router
+      .group(() => {
+        router.get('/', [controllers.Channels, 'index'])
+        router.post('/join', [controllers.Channels, 'join'])
+      })
+      .prefix('channels')
+      .as('channels')
+      .use(middleware.auth())
   })
   .prefix('/api/v1')

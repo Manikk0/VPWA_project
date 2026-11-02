@@ -32,6 +32,15 @@ export class AuthAccessTokenSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class ChannelBanSchema extends BaseModel {
+  static $columns = ['channelId', 'userId'] as const
+  $columns = ChannelBanSchema.$columns
+  @column({ isPrimary: true })
+  declare channelId: number
+  @column()
+  declare userId: number
+}
+
 export class ChannelMemberSchema extends BaseModel {
   static $columns = ['channelId', 'isHighlighted', 'joinedAt', 'userId'] as const
   $columns = ChannelMemberSchema.$columns
@@ -66,6 +75,26 @@ export class ChannelSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class KickVoteSchema extends BaseModel {
+  static $columns = ['channelId', 'targetUserId', 'votedByUserId'] as const
+  $columns = KickVoteSchema.$columns
+  @column({ isPrimary: true })
+  declare channelId: number
+  @column()
+  declare targetUserId: number
+  @column()
+  declare votedByUserId: number
+}
+
+export class MessageMentionSchema extends BaseModel {
+  static $columns = ['mentionedUserId', 'messageId'] as const
+  $columns = MessageMentionSchema.$columns
+  @column()
+  declare mentionedUserId: number
+  @column({ isPrimary: true })
+  declare messageId: number
+}
+
 export class MessageSchema extends BaseModel {
   static $columns = ['channelId', 'content', 'createdAt', 'id', 'senderId', 'updatedAt'] as const
   $columns = MessageSchema.$columns
@@ -84,7 +113,7 @@ export class MessageSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['createdAt', 'email', 'firstName', 'id', 'lastName', 'nickname', 'notifyOnlyMentions', 'password', 'status', 'updatedAt'] as const
+  static $columns = ['createdAt', 'email', 'firstName', 'id', 'lastName', 'nickname', 'notificationPref', 'password', 'status', 'updatedAt'] as const
   $columns = UserSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -99,7 +128,7 @@ export class UserSchema extends BaseModel {
   @column()
   declare nickname: string
   @column()
-  declare notifyOnlyMentions: boolean
+  declare notificationPref: string
   @column({ serializeAs: null })
   declare password: string
   @column()

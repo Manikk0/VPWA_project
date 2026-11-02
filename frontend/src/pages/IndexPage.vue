@@ -33,7 +33,16 @@
             :class="[$q.screen.lt.sm ? 'text-subtitle1 cursor-pointer' : 'text-h6']"
             @click="showChannelInfo"
           >
-            # {{ chatStore.activeChannelName }}
+            <q-icon
+              :name="
+                chatStore.activeChannel?.type === 'private' || chatStore.activeChannel?.isPrivate
+                  ? 'lock'
+                  : 'tag'
+              "
+              size="xs"
+              class="q-mr-xs"
+            />
+            {{ chatStore.activeChannelName }}
           </span>
           <!-- popis kanala vedla nazvu (na mobile sa skryje) -->
           <span v-if="chatStore.activeChannel?.description" class="text-caption q-ml-sm gt-xs">

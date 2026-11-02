@@ -9,9 +9,9 @@ export default class NewAccountController {
     const { firstName, lastName, nickname, email, password } =
       await request.validateUsing(signupValidator)
 
-    // vytvorenie pouzivatela (heslo sa hashuje)
+    // vytvorenie pouzivatela
     const user = await User.create({ firstName, lastName, nickname, email, password })
-    // nacitame pouzivatela znova z databazy, aby mal aj predvolene hodnoty (status, notifyOnlyMentions)
+    // nacitame pouzivatela znova z databazy, aby mal aj predvolene hodnoty (status, notificationPref)
     await user.refresh()
     const token = await User.accessTokens.create(user)
 

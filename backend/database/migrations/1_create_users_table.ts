@@ -12,18 +12,21 @@ export default class extends BaseSchema {
       table.string('first_name', 100).notNullable()
       table.string('last_name', 100).notNullable()
 
-      // prezyvka (nickname) a email musia byt unikatne
+      // nickname a email musia byt unikatne
       table.string('nickname', 50).notNullable().unique()
       table.string('email', 254).notNullable().unique()
 
       // heslo - uklada sa iba zahashovane
       table.string('password').notNullable()
 
-      // stav pouzivatela - na zaciatku je online
+      // stav pouzivatela - defaultne je online
       table.enum('status', ['online', 'dnd', 'offline']).notNullable().defaultTo('online')
 
-      // ci chce pouzivatel notifikacie iba pre spravy, kde je spomenuty (@nickname)
-      table.boolean('notify_only_mentions').notNullable().defaultTo(false)
+      // preferencie notifikacii
+      table
+        .enum('notification_pref', ['all', 'mentions_only', 'none'])
+        .notNullable()
+        .defaultTo('all')
 
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()
