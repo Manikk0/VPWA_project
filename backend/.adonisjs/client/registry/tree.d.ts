@@ -22,6 +22,9 @@ export interface ApiDefinition {
     channels: {
       index: typeof routes['channels.channels.index']
       join: typeof routes['channels.channels.join']
+      leave: typeof routes['channels.channels.leave']
+      destroy: typeof routes['channels.channels.destroy']
+      kick: typeof routes['channels.channels.kick']
     }
   }
 }

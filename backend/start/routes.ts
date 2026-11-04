@@ -39,6 +39,14 @@ router
       .group(() => {
         router.get('/', [controllers.Channels, 'index'])
         router.post('/join', [controllers.Channels, 'join'])
+        // id v adrese musi byt cislo
+        router
+          .post('/:id/leave', [controllers.Channels, 'leave'])
+          .where('id', router.matchers.number())
+        router.delete('/:id', [controllers.Channels, 'destroy']).where('id', router.matchers.number())
+        router
+          .post('/:id/kick', [controllers.Channels, 'kick'])
+          .where('id', router.matchers.number())
       })
       .prefix('channels')
       .as('channels')

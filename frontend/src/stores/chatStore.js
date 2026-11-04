@@ -448,7 +448,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // zrusenie kanala spravcom cez /quit
-    quitChannel(channelName = null) {
+    async quitChannel(channelName = null) {
       const targetName = channelName || this.activeChannelName
       const channel = this.channels.find((c) => c.name === targetName)
 
@@ -460,52 +460,57 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      // spravca rusi kanal, takze zanikne pre vsetkych clenov
-      this.deleteChannel(targetName)
+      try {
+        // server zmaze kanal pre vsetkych clenov
+        const response = await api.delete(`/channels/${channel.id}`)
+
+        // odstranenie sprav kanala
+        delete this.messages[targetName]
+
+        // nacitame kanaly zo servera (ak bol kanal otvoreny, prepne sa na iny)
+        await this.fetchChannels()
+
+        // popup sprava Kanal zanikol
+        Dialog.create({
+          title: 'Kanal zanikol',
+          message: response.data.message,
+          color: 'negative',
+        })
+      } catch (error) {
+        notifyError(error.response?.data?.message || 'Nepodarilo sa zrušiť kanál')
+        // kanal uz mohol zrusit niekto iny, preto obnovime zoznam
+        await this.fetchChannels()
+      }
     },
 
-    // uplne zmazanie kanala aj s jeho spravami (kanal zanikne pre vsetkych)
-    deleteChannel(channelName) {
-      // odstranenie kanala zo zoznamu vsetkych kanalov
-      this.channels = this.channels.filter((c) => c.name !== channelName)
-      // odstranenie sprav kanala
-      delete this.messages[channelName]
-
-      // prepneme na iny kanal pouzivatela
-      this.selectFirstChannel()
-
-      // popup sprava Kanal zanikol
-      Dialog.create({
-        title: 'Kanal zanikol',
-        message: `Kanal #${channelName} zanikol`,
-        color: 'negative',
-      })
-    },
-
-    // opustenie členstva cez /cancel
-    cancelChannel(channelName = null) {
+    // opustenie členstva cez /cancel alebo tlacidlo
+    async cancelChannel(channelName = null) {
       const targetName = channelName || this.activeChannelName
       const channel = this.channels.find((c) => c.name === targetName)
 
       if (!channel) return
 
-      // ak je pouzivatel spravca kanala, kanal zanika pre vsetkych
-      if (channel.createdBy === this.currentUser) {
-        this.deleteChannel(targetName)
-        return
+      try {
+        // ak je pouzivatel spravca kanala, server kanal zmaze pre vsetkych
+        const response = await api.post(`/channels/${channel.id}/leave`)
+
+        if (response.data.channelDeleted) {
+          delete this.messages[targetName]
+        }
+
+        // nacitame kanaly zo servera (ak bol kanal otvoreny, prepne sa na iny)
+        await this.fetchChannels()
+
+        Dialog.create({
+          title: response.data.channelDeleted ? 'Kanal zanikol' : 'Opustil si kanal',
+          message: response.data.message,
+          color: response.data.channelDeleted ? 'negative' : 'warning',
+        })
+      } catch (error) {
+        notifyError(error.response?.data?.message || 'Nepodarilo sa opustiť kanál')
+        // kanal uz mohol zrusit niekto iny, preto obnovime zoznam
+        await this.fetchChannels()
       }
-
-      // inak odoberieme iba aktualneho pouzivatela zo zoznamu clenov
-      channel.members = channel.members.filter((m) => m.name !== this.currentUser)
-
-      // prepneme na iny kanal pouzivatela
-      this.selectFirstChannel()
-
-      Dialog.create({
-        title: 'Opustil si kanal',
-        message: `Opustil si kanal #${targetName}`,
-        color: 'warning',
-      })
     },
 
     // funkcia na odoslanie spravy do aktualneho kanala
@@ -545,74 +550,27 @@ export const useChatStore = defineStore('chat', {
     },
 
     // vyhodenie pouzivatela z verejneho kanala cez /kick
-    kickUser(nickName) {
+    async kickUser(nickName) {
       if (!this.activeChannel || !nickName) return
 
-      const channel = this.activeChannel
+      try {
+        const response = await api.post(`/channels/${this.activeChannel.id}/kick`, {
+          nickname: nickName,
+        })
 
-      // /kick funguje iba vo verejnom kanali
-      if (channel.isPrivate) {
-        notifyError('Príkaz /kick funguje iba vo verejnom kanáli. V súkromnom použite /revoke')
-        return
+        // nacitame aktualnych clenov, zabanovanych a hlasy
+        await this.fetchChannels()
+
+        if (response.data.banned) {
+          notifySuccess(response.data.message)
+        } else {
+          notifyInfo(response.data.message)
+        }
+      } catch (error) {
+        notifyError(error.response?.data?.message || 'Nepodarilo sa vyhodiť používateľa')
+        // zoznam clenov mohol byt neaktualny, preto ho obnovime
+        await this.fetchChannels()
       }
-
-      // sam seba vyhodit nemozeme
-      if (nickName === this.currentUser) {
-        notifyWarning('Nemôžete vyhodiť sám seba. Na opustenie kanála použite /cancel')
-        return
-      }
-
-      // nemozeme vyhodit spravcu kanala
-      if (nickName === channel.createdBy) {
-        notifyWarning('Nemôžete vyhodiť správcu kanála!')
-        return
-      }
-
-      // kontrola ci je pouzivatel clenom kanala
-      const isMember = channel.members.some((m) => m.name === nickName)
-      if (!isMember) {
-        notifyError(`Používateľ ${nickName} sa v tomto kanáli nenachádza!`)
-        return
-      }
-
-      // spravca vyhadzuje natrvalo hned
-      if (this.isCurrentAdmin) {
-        this.banUser(channel, nickName)
-        notifySuccess(`Používateľ ${nickName} bol správcom natrvalo vyhodený z #${channel.name}`)
-        return
-      }
-
-      // bezny clen prida hlas za vyhodenie
-      if (!channel.kickVotes[nickName]) {
-        channel.kickVotes[nickName] = []
-      }
-      const votes = channel.kickVotes[nickName]
-
-      // jeden clen moze za toho isteho pouzivatela hlasovat iba raz
-      if (votes.includes(this.currentUser)) {
-        notifyWarning(`Za vyhodenie ${nickName} ste už hlasovali (${votes.length}/3)`)
-        return
-      }
-
-      votes.push(this.currentUser)
-
-      // ak su aspon 3 hlasy, pouzivatel dostane trvaly ban
-      if (votes.length >= 3) {
-        this.banUser(channel, nickName)
-        notifySuccess(`Používateľ ${nickName} dostal 3 hlasy a má trvalý ban v #${channel.name}`)
-      } else {
-        notifyInfo(`Hlasovali ste za vyhodenie ${nickName} (${votes.length}/3)`)
-      }
-    },
-
-    banUser(channel, nickName) {
-      channel.members = channel.members.filter((m) => m.name !== nickName)
-
-      if (!channel.bannedUsers.includes(nickName)) {
-        channel.bannedUsers.push(nickName)
-      }
-
-      delete channel.kickVotes[nickName]
     },
 
     // odobratie clena spravcom zo sukromneho kanala

@@ -2,6 +2,16 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import Channel from '#models/channel'
 import ChannelBan from '#models/channel_ban'
+import KickVote from '#models/kick_vote'
+
+// trvaly ban - pouzivatel prestane byt clenom, takze kanal zmizne z jeho zoznamu
+async function banUser(channel: Channel, userId: number) {
+  await channel.related('bannedUsers').attach([userId])
+  await channel.related('members').detach([userId])
+
+  // hlasy proti tomuto pouzivatelovi uz netreba
+  await KickVote.query().where('channelId', channel.id).where('targetUserId', userId).delete()
+}
 
 export default class ChannelsController {
   // zoznam kanalov, v ktorych je prihlaseny pouzivatel clenom
@@ -11,7 +21,13 @@ export default class ChannelsController {
 
     // nacitame kanaly pouzivatela z vazby v channel_members
     // ak pouzivatel kanal opustil alebo dostal ban, v channel_members uz nie je zaznam
-    const channels = await user.related('channels').query().preload('creator').preload('members')
+    const channels = await user
+      .related('channels')
+      .query()
+      .preload('creator')
+      .preload('members')
+      .preload('bannedUsers')
+      .preload('kickVotes', (query) => query.preload('targetUser').preload('votedByUser'))
 
     // upravime data kanalov do jednoducheho formatu pre frontend
     const result = []
@@ -29,6 +45,22 @@ export default class ChannelsController {
         })
       }
 
+      // nicky pouzivatelov s trvalym banom
+      const bannedList = []
+      for (const banned of channel.bannedUsers) {
+        bannedList.push(banned.nickname)
+      }
+
+      // hlasy za vyhodenie
+      const kickVotes: Record<string, string[]> = {}
+      for (const vote of channel.kickVotes) {
+        const targetNick = vote.targetUser.nickname
+        if (!kickVotes[targetNick]) {
+          kickVotes[targetNick] = []
+        }
+        kickVotes[targetNick].push(vote.votedByUser.nickname)
+      }
+
       result.push({
         id: channel.id,
         name: channel.name,
@@ -39,8 +71,8 @@ export default class ChannelsController {
         isHighlighted: channel.$extras.pivot_is_highlighted,
         joinedAt: channel.$extras.pivot_joined_at,
         members: membersList,
-        bannedUsers: [],
-        kickVotes: {},
+        bannedUsers: bannedList,
+        kickVotes: kickVotes,
       })
     }
 
@@ -129,6 +161,146 @@ export default class ChannelsController {
       message: `Vytvorený nový ${typText} kanál #${channel.name}`,
       channel: channel,
       alreadyMember: false,
+    })
+  }
+
+  // opustenie kanala - ak odchadza spravca, kanal zanika
+  async leave({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+
+    const channel = await Channel.find(params.id)
+    if (!channel) {
+      return response.notFound({ message: 'Kanál už neexistuje' })
+    }
+
+    // kanal moze opustit iba jeho clen
+    const isMember = await channel.related('members').query().where('users.id', user.id).first()
+    if (!isMember) {
+      return response.forbidden({ message: `Nie ste členom kanála #${channel.name}` })
+    }
+
+    // spravca odchadza - zmazeme kanal (clenstva a spravy zmaze databaza cez CASCADE)
+    if (channel.createdBy === user.id) {
+      await channel.delete()
+      return response.ok({
+        message: `Kanál #${channel.name} zanikol`,
+        channelDeleted: true,
+      })
+    }
+
+    // bezny clen - zmazeme iba jeho zaznam v channel_members
+    await channel.related('members').detach([user.id])
+
+    return response.ok({
+      message: `Opustili ste kanál #${channel.name}`,
+      channelDeleted: false,
+    })
+  }
+
+  // zrusenie kanala - moze iba spravca
+  async destroy({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+
+    const channel = await Channel.find(params.id)
+    if (!channel) {
+      return response.notFound({ message: 'Kanál už neexistuje' })
+    }
+
+    if (channel.createdBy !== user.id) {
+      return response.forbidden({ message: 'Iba správca môže zrušiť kanál' })
+    }
+
+    await channel.delete()
+
+    return response.ok({ message: `Kanál #${channel.name} zanikol` })
+  }
+
+  // vyhodenie clena cez /kick - spravca hned, bezni clenovia po 3 hlasoch
+  async kick({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const nickname = request.input('nickname')?.trim()
+
+    const channel = await Channel.find(params.id)
+    if (!channel) {
+      return response.notFound({ message: 'Kanál už neexistuje' })
+    }
+
+    // vyhadzovat moze iba clen kanala
+    const isMember = await channel.related('members').query().where('users.id', user.id).first()
+    if (!isMember) {
+      return response.forbidden({ message: `Nie ste členom kanála #${channel.name}` })
+    }
+
+    // /kick funguje iba vo verejnom kanali
+    if (channel.type === 'private') {
+      return response.badRequest({
+        message: 'Príkaz /kick funguje iba vo verejnom kanáli. V súkromnom použite /revoke',
+      })
+    }
+
+    // vyhodit sa da iba clen kanala
+    const target = await channel
+      .related('members')
+      .query()
+      .where('users.nickname', nickname || '')
+      .first()
+    if (!target) {
+      return response.notFound({
+        message: `Používateľ ${nickname} sa v tomto kanáli nenachádza!`,
+      })
+    }
+
+    if (target.id === user.id) {
+      return response.badRequest({
+        message: 'Nemôžete vyhodiť sám seba. Na opustenie kanála použite /cancel',
+      })
+    }
+
+    if (target.id === channel.createdBy) {
+      return response.badRequest({ message: 'Nemôžete vyhodiť správcu kanála!' })
+    }
+
+    // spravca vyhadzuje natrvalo hned
+    if (channel.createdBy === user.id) {
+      await banUser(channel, target.id)
+      return response.ok({
+        message: `Používateľ ${target.nickname} bol správcom natrvalo vyhodený z #${channel.name}`,
+        banned: true,
+      })
+    }
+
+    // jeden clen moze za toho isteho pouzivatela hlasovat iba raz
+    const existingVote = await KickVote.query()
+      .where('channelId', channel.id)
+      .where('targetUserId', target.id)
+      .where('votedByUserId', user.id)
+      .first()
+    if (existingVote) {
+      return response.badRequest({ message: `Za vyhodenie ${target.nickname} ste už hlasovali` })
+    }
+
+    // ulozime novy hlas a spocitame vsetky hlasy proti tomuto pouzivatelovi
+    await KickVote.create({
+      channelId: channel.id,
+      targetUserId: target.id,
+      votedByUserId: user.id,
+    })
+    const votes = await KickVote.query()
+      .where('channelId', channel.id)
+      .where('targetUserId', target.id)
+
+    // ak su aspon 3 hlasy, pouzivatel dostane trvaly ban
+    if (votes.length >= 3) {
+      await banUser(channel, target.id)
+      return response.ok({
+        message: `Používateľ ${target.nickname} dostal 3 hlasy a má trvalý ban v #${channel.name}`,
+        banned: true,
+      })
+    }
+
+    return response.ok({
+      message: `Hlasovali ste za vyhodenie ${target.nickname} (${votes.length}/3)`,
+      banned: false,
     })
   }
 }
