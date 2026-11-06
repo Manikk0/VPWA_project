@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { Dialog, AppVisibility } from 'quasar'
-import { users, channels, messages } from '@/mockData'
+import { users } from '@/mockData'
 import {
   getCurrentTime,
+  formatTime,
   get_name_from_nick,
   getUserStatus,
   notifySuccess,
@@ -30,17 +31,18 @@ export const useChatStore = defineStore('chat', {
     // meno aktualne vybraneho kanala
     activeChannelName: 'general',
 
-    // predvoleny zoznam kanalov
-    channels: channels,
+    // kanaly prihlaseneho pouzivatela
+    channels: [],
 
-    // ulozisko sprav pre jednotlive kanaly
-    messages: messages,
+    // nacitane spravy pre jednotlive kanaly
+    messages: {},
 
-    // pocet sprav v kazdom kanali v case, ked sa pouzivatel prepol do offline
-    offlineMessageCounts: {},
+    // ci ma kanal na serveri este starsie spravy, ktore sme nenacitali
+    hasMoreMessages: {},
 
-    // pocet zobrazenych sprav pre kazdy kanal - defaultne 10 najnovsich
-    visibleMessageCounts: {},
+    // cas (v milisekundach), kedy sa pouzivatel prepol do offline - null ak nie je offline
+    // spravy, ktore prisli po tomto case, sa v offline stave nezobrazuju
+    offlineSince: null,
 
     // slovnik pre vlastne poradie kanalov pouzivatelov { nick: ['general', 'test1'] }
     userChannelOrders: {},
@@ -82,23 +84,23 @@ export const useChatStore = defineStore('chat', {
       return true
     },
 
-    // vrati zoznam sprav pre aktualne vybrany kanal (podla poctu nacitanych sprav)
+    // vrati nacitane spravy pre aktualne vybrany kanal
     activeMessages() {
-      let allMessages = this.messages[this.activeChannelName] || []
-      const visibleCount = this.visibleMessageCounts[this.activeChannelName] || 10
+      const allMessages = this.messages[this.activeChannelName] || []
 
-      // 1. krok: ak je pouzivatel offline, odstranime z celej historie spravy,
-      // ktore prisli az po prepnuti do offline
-      if (this.currentUserStatus === 'Offline') {
-        const count = this.offlineMessageCounts[this.activeChannelName]
-        if (count !== undefined) {
-          allMessages = allMessages.slice(0, count)
-        }
+      // ak pouzivatel nie je offline, zobrazime vsetky nacitane spravy
+      if (this.currentUserStatus !== 'Offline' || !this.offlineSince) {
+        return allMessages
       }
 
-      // 2. krok: z ostatnych sprav vezmeme iba poslednych `visibleCount` (kvoli infinite scrollu)
-      const startIndex = Math.max(0, allMessages.length - visibleCount)
-      return allMessages.slice(startIndex)
+      // v offline stave skryjeme spravy, ktore prisli az po prepnuti do offline
+      const result = []
+      for (const message of allMessages) {
+        if (!message.receivedAt || message.receivedAt <= this.offlineSince) {
+          result.push(message)
+        }
+      }
+      return result
     },
 
     // vrati iba kanaly, v ktorych je prihlaseny pouzivatel clenom
@@ -244,20 +246,16 @@ export const useChatStore = defineStore('chat', {
 
       const wasOffline = user.status === 'Offline'
 
-      // pri prepnuti do offline si zapamatame, kolko sprav bolo v kazdom kanali
+      // pri prepnuti do offline si zapamatame cas - novsie spravy sa nebudu zobrazovat
       if (newStatus === 'Offline' && !wasOffline) {
-        this.offlineMessageCounts = {}
-        for (const channel of this.myChannels) {
-          const channelMessages = this.messages[channel.name] || []
-          this.offlineMessageCounts[channel.name] = channelMessages.length
-        }
+        this.offlineSince = Date.now()
       }
 
       user.status = newStatus
 
       // po navrate z offline sa kanaly aktualizuju
       if (wasOffline && newStatus !== 'Offline') {
-        this.offlineMessageCounts = {}
+        this.offlineSince = null
       }
 
       // kratka informacna notifikacia podla noveho stavu
@@ -314,17 +312,16 @@ export const useChatStore = defineStore('chat', {
       }
 
       // sprava sa ulozi vzdy, aj ked je pouzivatel offline
+      // receivedAt = kedy sprava prisla
       this.messages[channelName].push({
         user: sender,
         time: getCurrentTime(),
         text: text,
+        receivedAt: Date.now(),
       })
 
       // ked pouzivatel posle spravu, zrusime jeho stav pisania
       this.setTyping(channelName, sender, false)
-
-      // zvysime pocet viditelnych sprav, aby nova sprava nevytlacila najstarsiu z obrazovky
-      this.increaseVisibleCount(channelName)
 
       // notifikaciu vystavime iba ak je pouzivatel online (nie DND ani offline)
       // a aplikacia nie je v stave "visible" (AppVisibility)
@@ -354,21 +351,71 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
-    // funkcia na nacitanie dalsej davky starsich sprav pre aktualny kanal
-    loadOlderMessages() {
-      if (!this.activeChannelName) return false
+    // prevod spravy zo servera na tvar, ktory pouziva zobrazenie sprav (IndexPage)
+    convertServerMessage(message) {
+      return {
+        id: message.id,
+        user: message.user,
+        text: message.text,
+        time: formatTime(message.createdAt),
+        // nicky pouzivatelov oznacenych v sprave
+        mentions: message.mentions,
+      }
+    },
 
-      const allMessages = this.messages[this.activeChannelName] || []
-      const currentCount = this.visibleMessageCounts[this.activeChannelName] || 10
+    // nacitanie najnovsich sprav kanala zo servera (pri otvoreni kanala)
+    async fetchMessages(channelName) {
+      const channel = this.channels.find((c) => c.name === channelName)
+      if (!channel) return
 
-      // ak uz mame nacitane vsetky spravy v kanali, vratime false kedze ziadne dalsie nie su
-      if (currentCount >= allMessages.length) {
+      try {
+        const response = await api.get(`/channels/${channel.id}/messages`)
+
+        const loadedMessages = []
+        for (const message of response.data.messages) {
+          loadedMessages.push(this.convertServerMessage(message))
+        }
+
+        this.messages[channelName] = loadedMessages
+        this.hasMoreMessages[channelName] = response.data.hasMore
+      } catch {
+        notifyError('Nepodarilo sa načítať správy zo servera')
+      }
+    },
+
+    // nacitanie dalsej davky starsich sprav pre aktualny kanal (infinite scroll)
+    // vrati true ak su na serveri este dalsie starsie spravy, inak false
+    async loadOlderMessages() {
+      const channelName = this.activeChannelName
+      const channel = this.channels.find((c) => c.name === channelName)
+      const currentMessages = this.messages[channelName] || []
+
+      // ak nemame kanal alebo uz nie su starsie spravy, nie je co nacitat
+      if (!channel || !this.hasMoreMessages[channelName] || currentMessages.length === 0) {
         return false
       }
 
-      // pridame dalsich 10 sprav do viditelneho poctu pre tento kanal
-      this.visibleMessageCounts[this.activeChannelName] = currentCount + 10
-      return true
+      // id najstarsej nacitanej spravy - server vrati spravy starsie ako tato
+      const oldestId = currentMessages[0].id
+
+      try {
+        const response = await api.get(`/channels/${channel.id}/messages`, {
+          params: { before: oldestId },
+        })
+
+        const olderMessages = []
+        for (const message of response.data.messages) {
+          olderMessages.push(this.convertServerMessage(message))
+        }
+
+        // starsie spravy pridame na zaciatok zoznamu
+        this.messages[channelName] = olderMessages.concat(this.messages[channelName])
+        this.hasMoreMessages[channelName] = response.data.hasMore
+        return response.data.hasMore
+      } catch {
+        notifyError('Nepodarilo sa načítať staršie správy')
+        return false
+      }
     },
 
     // funkcia na prepnutie vybraneho kanala
@@ -427,13 +474,8 @@ export const useChatStore = defineStore('chat', {
         // po uspesnom pridani alebo vytvoreni znovu nacitame kanaly zo servera
         await this.fetchChannels()
 
-        // prepneme sa do pripojeneho alebo vytvoreneho kanala
+        // prepneme sa do pripojeneho alebo vytvoreneho kanala (spravy sa nacitaju v IndexPage)
         this.selectChannel(cleanName)
-
-        // inicializacia prazdneho zoznamu sprav pre novovytvoreny kanal ak este neexistuje
-        if (!this.messages[cleanName]) {
-          this.messages[cleanName] = []
-        }
 
         if (response.data.alreadyMember) {
           notifyInfo(response.data.message)
@@ -513,8 +555,8 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
-    // funkcia na odoslanie spravy do aktualneho kanala
-    sendMessage(text) {
+    // odoslanie spravy do aktualneho kanala - sprava sa ulozi na serveri
+    async sendMessage(text) {
       // ak nie je vybrany ziadny kanal (kde je pouzivatel clenom) alebo je text prazdny, nic nespravime
       if (!this.activeChannel || !text || !text.trim()) return
 
@@ -524,29 +566,25 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      // ak nahodou pre dany kanal este neexistuje pole sprav v dictionary, vytvorime ho
-      if (!this.messages[this.activeChannelName]) {
-        this.messages[this.activeChannelName] = []
+      // kanal si zapamatame, keby ho pouzivatel pocas odosielania prepol
+      const channelName = this.activeChannelName
+
+      try {
+        // server spravu ulozi, najde v nej @nickname a vrati ju spat
+        const response = await api.post(`/channels/${this.activeChannel.id}/messages`, {
+          content: text.trim(),
+        })
+
+        // ak nahodou pre dany kanal este neexistuje pole sprav, vytvorime ho
+        if (!this.messages[channelName]) {
+          this.messages[channelName] = []
+        }
+
+        // ulozenu spravu pridame na koniec zoznamu sprav kanala
+        this.messages[channelName].push(this.convertServerMessage(response.data))
+      } catch (error) {
+        notifyError(error.response?.data?.message || 'Správu sa nepodarilo odoslať')
       }
-
-      // vytvorenie noveho objektu spravy s aktualnym casom z helper funkcie
-      const newMessage = {
-        user: this.currentUser,
-        time: getCurrentTime(),
-        text: text.trim(),
-      }
-
-      // pridanie spravy do zoznamu sprav pre aktualny kanal
-      this.messages[this.activeChannelName].push(newMessage)
-
-      // zvysime pocet viditelnych sprav, aby nova sprava nevytlacila najstarsiu z obrazovky
-      this.increaseVisibleCount(this.activeChannelName)
-    },
-
-    // zvysi pocet viditelnych sprav v kanali o 1 (ak este nie je nastaveny, zacina sa od 10)
-    increaseVisibleCount(channelName) {
-      const currentCount = this.visibleMessageCounts[channelName] || 10
-      this.visibleMessageCounts[channelName] = currentCount + 1
     },
 
     // vyhodenie pouzivatela z verejneho kanala cez /kick

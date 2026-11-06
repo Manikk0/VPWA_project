@@ -47,6 +47,14 @@ router
         router
           .post('/:id/kick', [controllers.Channels, 'kick'])
           .where('id', router.matchers.number())
+
+        // spravy kanala - nacitanie (po davkach) a odoslanie novej spravy
+        router
+          .get('/:id/messages', [controllers.Messages, 'index'])
+          .where('id', router.matchers.number())
+        router
+          .post('/:id/messages', [controllers.Messages, 'store'])
+          .where('id', router.matchers.number())
       })
       .prefix('channels')
       .as('channels')

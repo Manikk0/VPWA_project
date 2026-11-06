@@ -9,6 +9,15 @@ export function getCurrentTime() {
   return `${hours}:${minutes}`
 }
 
+// funkcia prevedie datum zo servera na cas
+// cas sa zobrazi podla casoveho pasma prehliadaca
+export function formatTime(dateFromServer) {
+  const date = new Date(dateFromServer)
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
 // funkcia vrati cele meno pouzivatela podla zadaneho nicku
 export function get_name_from_nick(nickname, usersList = users) {
   if (!nickname) return ''

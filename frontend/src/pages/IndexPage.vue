@@ -127,9 +127,10 @@
           </template>
 
           <!-- zoznam sprav z aktualneho kanala -->
+          <!-- kluc je id spravy zo servera, simulovane spravy id nemaju, preto pouzijeme poradie -->
           <div
             v-for="(msg, index) in chatStore.activeMessages"
-            :key="index"
+            :key="msg.id || 'local-' + index"
             class="q-mb-md q-pa-sm rounded-borders shadow-1"
             :class="[
               msg.user === chatStore.currentUser ? 'bg-fern text-white q-ml-auto' : 'bg-white',
@@ -315,6 +316,11 @@ function showTypingDraft(nick) {
 
 // funkcia zisti ci je v sprave spomenuty aktualne prihlaseny pouzivatel so zavinacom
 function isMentioned(msg) {
+  // spravy zo servera maju zoznam oznacenych pouzivatelov (z tabulky message_mentions)
+  if (msg.mentions) {
+    return msg.mentions.includes(chatStore.currentUser)
+  }
+  // simulovane spravy zoznam nemaju - hladame @nick priamo v texte
   return msg.text.includes(`@${chatStore.currentUser}`)
 }
 
@@ -343,52 +349,54 @@ function handleContainerScroll() {
   }
 }
 
-// funkcia na nacitanie starsich sprav pri scrollovani nahor
-function onLoadOlderMessages(index, done) {
+// funkcia na nacitanie starsich sprav zo servera pri scrollovani nahor (infinite scroll)
+async function onLoadOlderMessages(index, done) {
   // ak pouzivatel este fyzicky nescroloval nahor, nevolame nacitavanie
   if (!userScrolledUp.value) {
     done()
     return
   }
 
-  // ak su uz zobrazene vsetky spravy kanala, hned zastavime infinite scroll (bez loadera)
-  const visibleCount = chatStore.visibleMessageCounts[chatStore.activeChannelName] || 10
-  if (visibleCount >= totalMessagesInChannel()) {
+  // ak server uz nema ziadne starsie spravy, hned zastavime infinite scroll (bez loadera)
+  if (!chatStore.hasMoreMessages[chatStore.activeChannelName]) {
     done(true)
     return
   }
 
-  // simulujeme kratke zdrzanie pre krajsi vizualny efekt nacitavania
-  setTimeout(() => {
-    const hasMore = chatStore.loadOlderMessages()
-    if (!hasMore) {
-      // ak uz nie su ziadne dalsie starsie spravy v kanali, zastavime infinite scroll
-      done(true)
-    } else {
-      // nacitali sme dalsiu davku sprav
-      done()
-    }
-  }, 500)
+  // nacitame dalsiu davku starsich sprav zo servera
+  const hasMore = await chatStore.loadOlderMessages()
+  if (!hasMore) {
+    // ak uz nie su ziadne dalsie starsie spravy v kanali, zastavime infinite scroll
+    done(true)
+  } else {
+    // nacitali sme dalsiu davku sprav
+    done()
+  }
 }
 
-// ked sa prepne kanal, posunieme chat na spodok (k najnovsim spravam) a zakazeme infinite scroll kym pouzivatel nescroloval
+// ked sa prepne kanal, nacitame jeho spravy zo servera, posunieme chat na spodok (k najnovsim spravam)
+// a zakazeme infinite scroll kym pouzivatel nescroloval
 watch(
   () => chatStore.activeChannelName,
-  () => {
+  async (channelName) => {
     userScrolledUp.value = false
+    if (channelName) {
+      await chatStore.fetchMessages(channelName)
+    }
     scrollToBottom()
   },
   { immediate: true },
 )
 
-// funkcia vrati pocet vsetkych sprav v aktualnom kanali (nielen zobrazenych)
-function totalMessagesInChannel() {
+// funkcia vrati poslednu (najnovsiu) spravu v aktualnom kanali
+function lastMessageInChannel() {
   const channelMessages = chatStore.messages[chatStore.activeChannelName] || []
-  return channelMessages.length
+  return channelMessages[channelMessages.length - 1]
 }
 
-// ked pribudne nova sprava, posunieme chat na spodok
-watch(totalMessagesInChannel, () => {
+// ked pribudne nova sprava na koniec, posunieme chat na spodok
+// (pri nacitani starsich sprav sa posledna sprava nemeni, takze chat neskoci dole)
+watch(lastMessageInChannel, () => {
   scrollToBottom()
 })
 
@@ -449,10 +457,9 @@ function handleSend() {
       )
     }
   } else {
-    // ak text nezacina lomitkom, je to obycajna sprava
+    // ak text nezacina lomitkom, je to obycajna sprava - odosle sa na server
+    // (chat sa posunie dole sam, ked sa sprava objavi v zozname)
     chatStore.sendMessage(text)
-    // posunieme chat na najnovsiu spravu
-    scrollToBottom()
   }
 
   // vycistenie vstupneho pola
