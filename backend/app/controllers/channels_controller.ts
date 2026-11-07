@@ -3,6 +3,8 @@ import { DateTime } from 'luxon'
 import Channel from '#models/channel'
 import ChannelBan from '#models/channel_ban'
 import KickVote from '#models/kick_vote'
+import User from '#models/user'
+import db from '@adonisjs/lucid/services/db'
 
 // trvaly ban - pouzivatel prestane byt clenom, takze kanal zmizne z jeho zoznamu
 async function banUser(channel: Channel, userId: number) {
@@ -302,5 +304,89 @@ export default class ChannelsController {
       message: `Hlasovali ste za vyhodenie ${target.nickname} (${votes.length}/3)`,
       banned: false,
     })
+  }
+
+  // pozvanie pouzivatela do kanala cez /invite
+  // pozvany pouzivatel ma kanal zvyrazneny a navrchu zoznamu, kym ho neotvori
+  async invite({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const nickname = request.input('nickname')?.trim()
+
+    const channel = await Channel.find(params.id)
+    if (!channel) {
+      return response.notFound({ message: 'Kanál už neexistuje' })
+    }
+
+    // pozyvat moze iba clen kanala
+    const isMember = await channel.related('members').query().where('users.id', user.id).first()
+    if (!isMember) {
+      return response.forbidden({ message: `Nie ste členom kanála #${channel.name}` })
+    }
+
+    // najdeme pozvaneho pouzivatela podla nicku
+    const target = await User.findBy('nickname', nickname || '')
+    if (!target) {
+      return response.notFound({ message: `Používateľ ${nickname} neexistuje!` })
+    }
+
+    const isAdmin = channel.createdBy === user.id
+
+    // do sukromneho kanala moze pozyvat iba spravca
+    if (channel.type === 'private' && !isAdmin) {
+      return response.forbidden({
+        message: 'Iba správca môže pridávať členov do súkromného kanála!',
+      })
+    }
+
+    // kontrola ci uz pouzivatel nie je clenom kanala
+    const isTargetMember = await channel
+      .related('members')
+      .query()
+      .where('users.id', target.id)
+      .first()
+    if (isTargetMember) {
+      return response.badRequest({ message: `Používateľ ${target.nickname} už je v tomto kanáli!` })
+    }
+
+    // ak ma pouzivatel ban, obnovit pristup moze iba spravca
+    const isBanned = await ChannelBan.query()
+      .where('channelId', channel.id)
+      .where('userId', target.id)
+      .first()
+    if (isBanned) {
+      if (!isAdmin) {
+        return response.forbidden({
+          message: `Používateľ ${target.nickname} má v tomto kanáli ban, obnoviť prístup môže iba správca!`,
+        })
+      }
+      // spravca rusi ban
+      await channel.related('bannedUsers').detach([target.id])
+    }
+
+    // pridame pouzivatela do kanala - is_highlighted = true znamena, ze kanal je pre neho zvyrazneny
+    await channel.related('members').attach({
+      [target.id]: {
+        is_highlighted: true,
+        joined_at: DateTime.now().toSQL(),
+      },
+    })
+
+    return response.ok({
+      message: `Používateľ ${target.nickname} bol úspešne pridaný do kanála #${channel.name}`,
+    })
+  }
+
+  // pouzivatel otvoril kanal - kanal uz nebude zvyrazneny
+  async seen({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+
+    // zmenime iba zaznam prihlaseneho pouzivatela v tabulke channel_members
+    await db
+      .from('channel_members')
+      .where('channel_id', params.id)
+      .where('user_id', user.id)
+      .update({ is_highlighted: false })
+
+    return response.ok({ message: 'Kanál bol označený ako videný' })
   }
 }

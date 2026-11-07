@@ -25,6 +25,8 @@ export interface ApiDefinition {
       leave: typeof routes['channels.channels.leave']
       destroy: typeof routes['channels.channels.destroy']
       kick: typeof routes['channels.channels.kick']
+      invite: typeof routes['channels.channels.invite']
+      seen: typeof routes['channels.channels.seen']
     }
     messages: {
       index: typeof routes['channels.messages.index']

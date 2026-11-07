@@ -62,6 +62,18 @@ const routes = {
     tokens: [[0,"api"],[0,"v1"],[0,"channels"],[1,"id"],[0,"kick"]],
     types: placeholder as Registry['channels.channels.kick']['types'],
   },
+  'channels.channels.invite': {
+    methods: ["POST"],
+    pattern: '/api/v1/channels/:id/invite',
+    tokens: [[0,"api"],[0,"v1"],[0,"channels"],[1,"id"],[0,"invite"]],
+    types: placeholder as Registry['channels.channels.invite']['types'],
+  },
+  'channels.channels.seen': {
+    methods: ["POST"],
+    pattern: '/api/v1/channels/:id/seen',
+    tokens: [[0,"api"],[0,"v1"],[0,"channels"],[1,"id"],[0,"seen"]],
+    types: placeholder as Registry['channels.channels.seen']['types'],
+  },
   'channels.messages.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/channels/:id/messages',

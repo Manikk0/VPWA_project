@@ -44,12 +44,6 @@ export const useChatStore = defineStore('chat', {
     // spravy, ktore prisli po tomto case, sa v offline stave nezobrazuju
     offlineSince: null,
 
-    // slovnik pre vlastne poradie kanalov pouzivatelov { nick: ['general', 'test1'] }
-    userChannelOrders: {},
-
-    // slovnik pre zvyraznene (nove) kanaly pouzivatelov { nick: ['test1'] }
-    highlightedChannels: {},
-
     // slovnik pre pisucich pouzivatelov v kanaloch { general: ['ed', 'mara'] }
     typingUsers: {},
 
@@ -114,20 +108,23 @@ export const useChatStore = defineStore('chat', {
         }
       }
 
-      // ak ma pouzivatel ulozene vlastne poradie kanalov, zoradime ich podla neho
-      const userOrder = state.userChannelOrders[state.currentUser]
-      if (userOrder && userOrder.length > 0) {
-        result.sort((a, b) => {
-          const indexA = userOrder.indexOf(a.name)
-          const indexB = userOrder.indexOf(b.name)
-
-          // ak kanal v poradi chyba, dame ho az na koniec
-          const posA = indexA !== -1 ? indexA : 999
-          const posB = indexB !== -1 ? indexB : 999
-
+      // kanaly s pozvankou dame na vrch zoznamu
+      // ostatne kanaly ostanu v takom poradi, ako prisli zo servera
+      result.sort((a, b) => {
+        const posA = a.isHighlighted ? 0 : 1
+        const posB = b.isHighlighted ? 0 : 1
+        if (posA !== posB) {
           return posA - posB
-        })
-      }
+        }
+
+        // ak su oba kanaly zvyraznene, najnovsia pozvanka bude uplne navrchu
+        if (a.isHighlighted && b.isHighlighted) {
+          return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()
+        }
+
+        // ostatne kanaly nechame v povodnom poradi
+        return 0
+      })
 
       return result
     },
@@ -422,20 +419,21 @@ export const useChatStore = defineStore('chat', {
     selectChannel(name) {
       this.activeChannelName = name
 
-      // po rozkliknuti kanala zrusime jeho zvyraznenie pre aktualneho pouzivatela
-      if (this.currentUser && this.highlightedChannels[this.currentUser]) {
-        this.highlightedChannels[this.currentUser] = this.highlightedChannels[
-          this.currentUser
-        ].filter((ch) => ch !== name)
+      // po rozkliknuti kanala zrusime jeho zvyraznenie
+      const channel = this.channels.find((c) => c.name === name)
+      if (channel && channel.isHighlighted) {
+        channel.isHighlighted = false
+        api.post(`/channels/${channel.id}/seen`).catch(() => {
+          // ak sa to na serveri nepodari, kanal bude po obnoveni stranky znova zvyrazneny
+        })
       }
     },
 
-    // zisti ci je kanal zvyrazneny pre prihlaseneho pouzivatela
+    // zisti ci je kanal zvyrazneny pre prihlaseneho pouzivatela (pozvanka, ktoru este neotvoril)
     isChannelHighlighted(channelName) {
-      if (!this.currentUser || !this.highlightedChannels[this.currentUser]) {
-        return false
-      }
-      return this.highlightedChannels[this.currentUser].includes(channelName)
+      const channel = this.channels.find((c) => c.name === channelName)
+      if (!channel) return false
+      return channel.isHighlighted === true
     },
 
     // prepne na prvy nezvyrazneny kanal pouzivatela, ak ziadny nezvyrazneny nema tak na prvy kanal
@@ -650,7 +648,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // pozvanie pouzivatela do aktualneho kanala cez /invite @user
-    inviteUser(nickName) {
+    async inviteUser(nickName) {
       if (!this.activeChannel) {
         return
       }
@@ -660,73 +658,20 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      // kontrola ci user existuje v zozname registrovanych pouzivatelov
-      const userExists = this.allUsers.includes(nickName)
-      if (!userExists) {
-        notifyError(`Používateľ ${nickName} neexistuje!`)
-        return
+      try {
+        // server skontroluje ci pouzivatel existuje, ci moze byt pozvany a ci nema ban
+        // pozvanemu pouzivatelovi sa kanal ulozi ako zvyrazneny (is_highlighted)
+        const response = await api.post(`/channels/${this.activeChannel.id}/invite`, {
+          nickname: nickName,
+        })
+
+        // nacitame aktualnych clenov kanala (aj zoznam zabanovanych, ak spravca zrusil ban)
+        await this.fetchChannels()
+
+        notifySuccess(response.data.message)
+      } catch (error) {
+        notifyError(error.response?.data?.message || 'Nepodarilo sa pozvať používateľa')
       }
-
-      // ak je kanal sukromny, kontrolujeme ci je aktualny pouzivatel spravcom kanalu
-      if (this.activeChannel.isPrivate && !this.isCurrentAdmin) {
-        notifyError('Iba správca môže pridávať členov do súkromného kanála!')
-        return
-      }
-
-      if (this.activeChannel.bannedUsers.includes(nickName)) {
-        if (!this.isCurrentAdmin) {
-          notifyError(
-            `Používateľ ${nickName} má v tomto kanáli ban, obnoviť prístup môže iba správca!`,
-          )
-          return
-        }
-
-        // spravca rusi ban
-        this.activeChannel.bannedUsers = this.activeChannel.bannedUsers.filter(
-          (n) => n !== nickName,
-        )
-        notifyInfo(`Ban pre používateľa ${nickName} bol zrušený`)
-      }
-
-      // kontrola ci uz pouzivatel nahodou nie je clenom kanala
-      const isAlreadyMember = this.activeChannel.members.some((m) => m.name === nickName)
-      if (isAlreadyMember) {
-        notifyWarning(`Používateľ ${nickName} už je v tomto kanáli!`)
-        return
-      }
-
-      // ak vsetko preslo, pridame usera do zoznamu clenov
-      this.activeChannel.members.push({
-        name: nickName,
-        role: 'member',
-      })
-
-      // topovanie - pridame alebo posunieme kanal na zaciatok poradia pre pozvaneho pouzivatela
-      if (!this.userChannelOrders[nickName]) {
-        // ak pozvany pouzivatel este nema vlastne poradie, vytvorime ho z jeho kanalov
-        const userChannels = this.channels
-          .filter((c) => c.members.some((m) => m.name === nickName))
-          .map((c) => c.name)
-        this.userChannelOrders[nickName] = userChannels
-      }
-
-      // vyberieme kanal z existujuceho poradia a dame ho na prve miesto
-      const currentOrder = this.userChannelOrders[nickName].filter(
-        (ch) => ch !== this.activeChannelName,
-      )
-      this.userChannelOrders[nickName] = [this.activeChannelName, ...currentOrder]
-
-      // pridame kanal do zoznamu zvyraznenych kanalov pre pozvaneho pouzivatela
-      if (!this.highlightedChannels[nickName]) {
-        this.highlightedChannels[nickName] = []
-      }
-      if (!this.highlightedChannels[nickName].includes(this.activeChannelName)) {
-        this.highlightedChannels[nickName].push(this.activeChannelName)
-      }
-
-      notifySuccess(
-        `Používateľ ${nickName} bol úspešne pridaný do kanála #${this.activeChannelName}`,
-      )
     },
   },
 })

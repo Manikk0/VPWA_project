@@ -47,6 +47,14 @@ router
         router
           .post('/:id/kick', [controllers.Channels, 'kick'])
           .where('id', router.matchers.number())
+        // pozvanie pouzivatela do kanala cez /invite
+        router
+          .post('/:id/invite', [controllers.Channels, 'invite'])
+          .where('id', router.matchers.number())
+        // pouzivatel otvoril kanal - zrusime zvyraznenie pozvanky
+        router
+          .post('/:id/seen', [controllers.Channels, 'seen'])
+          .where('id', router.matchers.number())
 
         // spravy kanala - nacitanie (po davkach) a odoslanie novej spravy
         router
