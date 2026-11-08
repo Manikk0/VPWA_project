@@ -12,13 +12,13 @@ import Message from '#models/message'
 // pri prihlaseni sa pouzivatel hlada podla emailu alebo podla nicknamu
 export default class User extends compose(
   UserSchema,
-  withAuthFinder(hash, { uids: ['email', 'nickname'], passwordColumnName: 'password' })
+  withAuthFinder(hash, { uids: ['email', 'nickname'], passwordColumnName: 'passwordHash' })
 ) {
   static accessTokens = DbAccessTokensProvider.forModel(User)
   declare currentAccessToken?: AccessToken
 
   // kanaly, ktorych spravcom je pouzivatel
-  @hasMany(() => Channel, { foreignKey: 'createdBy' })
+  @hasMany(() => Channel, { foreignKey: 'createdByUserId' })
   declare createdChannels: HasMany<typeof Channel>
 
   // kanaly, v ktorych je pouzivatel clenom

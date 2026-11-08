@@ -67,6 +67,8 @@ export default defineConfig({
     () => import('#start/routes'),
     () => import('#start/kernel'),
     () => import('#start/validator'),
+    // mazanie kanalov bez aktivity 30 dni
+    { file: () => import('#start/channel_cleanup'), environment: ['web'] },
   ],
 
   /*

@@ -55,24 +55,20 @@ export class ChannelMemberSchema extends BaseModel {
 }
 
 export class ChannelSchema extends BaseModel {
-  static $columns = ['createdAt', 'createdBy', 'description', 'id', 'lastActivityAt', 'name', 'type', 'updatedAt'] as const
+  static $columns = ['createdAt', 'createdByUserId', 'description', 'id', 'name', 'type'] as const
   $columns = ChannelSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
-  declare createdBy: number
+  declare createdByUserId: number
   @column()
   declare description: string | null
   @column({ isPrimary: true })
   declare id: number
-  @column.dateTime()
-  declare lastActivityAt: DateTime
   @column()
   declare name: string
   @column()
   declare type: string
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
 }
 
 export class KickVoteSchema extends BaseModel {
@@ -96,7 +92,7 @@ export class MessageMentionSchema extends BaseModel {
 }
 
 export class MessageSchema extends BaseModel {
-  static $columns = ['channelId', 'content', 'createdAt', 'id', 'senderId', 'updatedAt'] as const
+  static $columns = ['channelId', 'content', 'createdAt', 'id', 'senderId'] as const
   $columns = MessageSchema.$columns
   @column()
   declare channelId: number
@@ -108,12 +104,10 @@ export class MessageSchema extends BaseModel {
   declare id: number
   @column()
   declare senderId: number
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['createdAt', 'email', 'firstName', 'id', 'lastName', 'nickname', 'notificationPref', 'password', 'status', 'updatedAt'] as const
+  static $columns = ['createdAt', 'email', 'firstName', 'id', 'lastName', 'nickname', 'notificationPref', 'passwordHash', 'status'] as const
   $columns = UserSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -130,9 +124,7 @@ export class UserSchema extends BaseModel {
   @column()
   declare notificationPref: string
   @column({ serializeAs: null })
-  declare password: string
+  declare passwordHash: string
   @column()
   declare status: string
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
 }

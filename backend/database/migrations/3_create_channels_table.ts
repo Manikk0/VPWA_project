@@ -20,18 +20,14 @@ export default class extends BaseSchema {
       // spravca kanala = pouzivatel, ktory ho vytvoril
       // ak sa pouzivatel zmaze, zmazu sa aj jeho kanaly
       table
-        .integer('created_by')
+        .integer('created_by_user_id')
         .unsigned()
         .notNullable()
         .references('id')
         .inTable('users')
         .onDelete('CASCADE')
 
-      // cas poslednej spravy - podla neho kanal po 30 dnoch bez aktivity zanikne
-      table.timestamp('last_activity_at').notNullable()
-
       table.timestamp('created_at').notNullable()
-      table.timestamp('updated_at').nullable()
     })
   }
 

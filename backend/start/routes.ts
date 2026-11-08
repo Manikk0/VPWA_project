@@ -51,6 +51,10 @@ router
         router
           .post('/:id/invite', [controllers.Channels, 'invite'])
           .where('id', router.matchers.number())
+        // odobratie clena zo sukromneho kanala cez /revoke
+        router
+          .post('/:id/revoke', [controllers.Channels, 'revoke'])
+          .where('id', router.matchers.number())
         // pouzivatel otvoril kanal - zrusime zvyraznenie pozvanky
         router
           .post('/:id/seen', [controllers.Channels, 'seen'])

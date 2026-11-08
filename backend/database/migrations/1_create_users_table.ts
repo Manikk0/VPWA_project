@@ -17,7 +17,7 @@ export default class extends BaseSchema {
       table.string('email', 254).notNullable().unique()
 
       // heslo - uklada sa iba zahashovane
-      table.string('password').notNullable()
+      table.string('password_hash').notNullable()
 
       // stav pouzivatela - defaultne je online
       table.enum('status', ['online', 'dnd', 'offline']).notNullable().defaultTo('online')
@@ -29,7 +29,6 @@ export default class extends BaseSchema {
         .defaultTo('all')
 
       table.timestamp('created_at').notNullable()
-      table.timestamp('updated_at').nullable()
     })
   }
 

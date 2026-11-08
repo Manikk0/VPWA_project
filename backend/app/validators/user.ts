@@ -13,12 +13,13 @@ export const signupValidator = vine.create({
   // meno a priezvisko su povinne
   firstName: vine.string().trim().minLength(1).maxLength(100),
   lastName: vine.string().trim().minLength(1).maxLength(100),
-  // prezyvka musi byt unikatna
+  // prezyvka musi byt unikatna a nesmie obsahovat medzery
   nickname: vine
     .string()
     .trim()
     .minLength(1)
     .maxLength(50)
+    .regex(/^\S+$/)
     .unique({ table: 'users', column: 'nickname' }),
   email: email().unique({ table: 'users', column: 'email' }),
   password: password(),

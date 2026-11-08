@@ -1,5 +1,4 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { DateTime } from 'luxon'
 import Channel from '#models/channel'
 import Message from '#models/message'
 import { createMessageValidator } from '#validators/message'
@@ -103,10 +102,6 @@ export default class MessagesController {
       senderId: user.id,
       content: content,
     })
-
-    // kanal je aktivny - podla tohto casu kanal po 30 dnoch bez spravy zanikne
-    channel.lastActivityAt = DateTime.now()
-    await channel.save()
 
     // najdeme v texte vsetky @nickname
     const mentionedNicks: string[] = []

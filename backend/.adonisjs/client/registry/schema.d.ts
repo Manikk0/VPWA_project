@@ -138,6 +138,19 @@ export interface Registry {
       rawResponse: ExtractRawResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['invite']>>>
     }
   }
+  'channels.channels.revoke': {
+    methods: ["POST"]
+    pattern: '/api/v1/channels/:id/revoke'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['revoke']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['revoke']>>>
+      rawResponse: ExtractRawResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['revoke']>>>
+    }
+  }
   'channels.channels.seen': {
     methods: ["POST"]
     pattern: '/api/v1/channels/:id/seen'

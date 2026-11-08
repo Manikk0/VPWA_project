@@ -455,7 +455,7 @@ export const useChatStore = defineStore('chat', {
     // vytvorenie alebo pridanie sa do kanala cez /join
     async joinChannel(channelName, isPrivate = false) {
       // ocistenie nazvu kanala od mriezky a medzier
-      const cleanName = channelName.replace('#', '').trim()
+      const cleanName = channelName.replace('#', '').trim().toLowerCase()
 
       if (!cleanName) {
         notifyWarning('Zadajte platny nazov kanala!')
@@ -610,7 +610,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // odobratie clena spravcom zo sukromneho kanala
-    revokeUser(nickName) {
+    async revokeUser(nickName) {
       if (!this.activeChannel) {
         return
       }
@@ -632,19 +632,19 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      // najdeme pouzivatela v zozname clenov kanala
-      const memberIndex = this.activeChannel.members.findIndex((m) => m.name === nickName)
+      try {
+        // server pouzivatela odoberie z kanala (skontroluje aj ci je clenom)
+        const response = await api.post(`/channels/${this.activeChannel.id}/revoke`, {
+          nickname: nickName,
+        })
 
-      // ak pouzivatel nie je clenom kanala, vypiseme chybu
-      if (memberIndex === -1) {
-        notifyError(`Používateľ ${nickName} nie je členom kanála #${this.activeChannelName}!`)
-        return
+        // nacitame aktualnych clenov kanala
+        await this.fetchChannels()
+
+        notifySuccess(response.data.message)
+      } catch (error) {
+        notifyError(error.response?.data?.message || 'Nepodarilo sa odobrať používateľa')
       }
-
-      // odstranime pouzivatela zo zoznamu clenov
-      this.activeChannel.members.splice(memberIndex, 1)
-
-      notifySuccess(`Používateľ ${nickName} bol odobratý z kanála #${this.activeChannelName}`)
     },
 
     // pozvanie pouzivatela do aktualneho kanala cez /invite @user

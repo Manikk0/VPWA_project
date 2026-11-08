@@ -14,7 +14,6 @@ export default class UserTransformer extends BaseTransformer<User> {
       'notificationPref',
       'notifyOnlyMentions',
       'createdAt',
-      'updatedAt',
       'initials',
     ])
   }

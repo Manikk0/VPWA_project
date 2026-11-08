@@ -184,7 +184,7 @@ export default class extends BaseSeeder {
     const usersByNick: Record<string, User> = {}
     for (const data of users) {
       // heslo sa pri ulozeni zahashuje automaticky
-      const user = await User.create({ ...data, password: TEST_PASSWORD })
+      const user = await User.create({ ...data, passwordHash: TEST_PASSWORD })
       usersByNick[data.nickname] = user
     }
 
@@ -192,18 +192,11 @@ export default class extends BaseSeeder {
     for (const data of channels) {
       const channelMessages = messages[data.name as keyof typeof messages]
 
-      // posledna aktivita = cas poslednej spravy (ak kanal nema spravy, tak teraz)
-      let lastActivityAt = DateTime.now()
-      if (channelMessages.length > 0) {
-        lastActivityAt = yesterdayAt(channelMessages[channelMessages.length - 1].time)
-      }
-
       const channel = await Channel.create({
         name: data.name,
         type: data.type,
         description: data.description,
-        createdBy: usersByNick[data.createdBy].id,
-        lastActivityAt: lastActivityAt,
+        createdByUserId: usersByNick[data.createdBy].id,
       })
 
       // clenovia kanala - zapis do tabulky channel_members

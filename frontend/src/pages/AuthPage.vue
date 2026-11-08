@@ -184,6 +184,9 @@ function getErrorMessage(error) {
   if (firstError.field === 'nickname' && firstError.rule === 'database.unique') {
     return 'Používateľ s týmto nickom už existuje!'
   }
+  if (firstError.field === 'nickname' && firstError.rule === 'regex') {
+    return 'Nickname nesmie obsahovať medzery!'
+  }
   if (firstError.field === 'email' && firstError.rule === 'database.unique') {
     return 'Používateľ s týmto emailom už existuje!'
   }

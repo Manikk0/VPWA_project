@@ -8,7 +8,7 @@ import KickVote from '#models/kick_vote'
 // model kanala - stlpce su v ChannelSchema
 export default class Channel extends ChannelSchema {
   // spravca kanala (pouzivatel, ktory kanal vytvoril)
-  @belongsTo(() => User, { foreignKey: 'createdBy' })
+  @belongsTo(() => User, { foreignKey: 'createdByUserId' })
   declare creator: BelongsTo<typeof User>
 
   // clenovia kanala cez spojovaciu tabulku channel_members

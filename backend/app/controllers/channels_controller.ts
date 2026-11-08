@@ -43,7 +43,7 @@ export default class ChannelsController {
           // kvoli spatnej kompatibilite s frontendom kde sa v mock datach pouzivalo name ako nick
           name: member.nickname,
           fullName: `${member.firstName} ${member.lastName}`,
-          role: member.id === channel.createdBy ? 'admin' : 'member',
+          role: member.id === channel.createdByUserId ? 'admin' : 'member',
         })
       }
 
@@ -87,7 +87,8 @@ export default class ChannelsController {
     const user = auth.getUserOrFail()
 
     // ziskame nazov a typ kanala
-    const name = request.input('name')?.trim()
+    // nazov ukladame vzdy malymi pismenami kvoli kontrole jedinecnosti
+    const name = request.input('name')?.trim().toLowerCase()
     const type = request.input('type') === 'private' ? 'private' : 'public'
 
     if (!name) {
@@ -146,8 +147,7 @@ export default class ChannelsController {
       name: name,
       type: type,
       description: request.input('description') || null,
-      createdBy: user.id,
-      lastActivityAt: DateTime.now(),
+      createdByUserId: user.id,
     })
 
     // pouzivatel ktory kanal vytvoril sa stava jeho spravcom
@@ -182,7 +182,7 @@ export default class ChannelsController {
     }
 
     // spravca odchadza - zmazeme kanal (clenstva a spravy zmaze databaza cez CASCADE)
-    if (channel.createdBy === user.id) {
+    if (channel.createdByUserId === user.id) {
       await channel.delete()
       return response.ok({
         message: `Kanál #${channel.name} zanikol`,
@@ -208,7 +208,7 @@ export default class ChannelsController {
       return response.notFound({ message: 'Kanál už neexistuje' })
     }
 
-    if (channel.createdBy !== user.id) {
+    if (channel.createdByUserId !== user.id) {
       return response.forbidden({ message: 'Iba správca môže zrušiť kanál' })
     }
 
@@ -258,12 +258,12 @@ export default class ChannelsController {
       })
     }
 
-    if (target.id === channel.createdBy) {
+    if (target.id === channel.createdByUserId) {
       return response.badRequest({ message: 'Nemôžete vyhodiť správcu kanála!' })
     }
 
     // spravca vyhadzuje natrvalo hned
-    if (channel.createdBy === user.id) {
+    if (channel.createdByUserId === user.id) {
       await banUser(channel, target.id)
       return response.ok({
         message: `Používateľ ${target.nickname} bol správcom natrvalo vyhodený z #${channel.name}`,
@@ -329,7 +329,7 @@ export default class ChannelsController {
       return response.notFound({ message: `Používateľ ${nickname} neexistuje!` })
     }
 
-    const isAdmin = channel.createdBy === user.id
+    const isAdmin = channel.createdByUserId === user.id
 
     // do sukromneho kanala moze pozyvat iba spravca
     if (channel.type === 'private' && !isAdmin) {
@@ -373,6 +373,50 @@ export default class ChannelsController {
 
     return response.ok({
       message: `Používateľ ${target.nickname} bol úspešne pridaný do kanála #${channel.name}`,
+    })
+  }
+
+  // odobratie clena zo sukromneho kanala cez /revoke (iba spravca)
+  async revoke({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const nickname = request.input('nickname')?.trim()
+
+    const channel = await Channel.find(params.id)
+    if (!channel) {
+      return response.notFound({ message: 'Kanál už neexistuje' })
+    }
+
+    // /revoke funguje iba v sukromnom kanali a moze ho pouzit iba spravca
+    if (channel.type !== 'private' || channel.createdByUserId !== user.id) {
+      return response.forbidden({
+        message: 'Príkaz /revoke môže použiť iba správca kanála a iba v súkromnom kanáli!',
+      })
+    }
+
+    // odobrat sa da iba clen kanala
+    const target = await channel
+      .related('members')
+      .query()
+      .where('users.nickname', nickname || '')
+      .first()
+    if (!target) {
+      return response.notFound({
+        message: `Používateľ ${nickname} nie je členom kanála #${channel.name}!`,
+      })
+    }
+
+    // spravca nemoze odobrat sam seba
+    if (target.id === user.id) {
+      return response.badRequest({
+        message: 'Nemôžete odobrať sám seba. Na zrušenie kanála použite /quit',
+      })
+    }
+
+    // zmazeme zaznam pouzivatela v channel_members - kanal mu zmizne zo zoznamu
+    await channel.related('members').detach([target.id])
+
+    return response.ok({
+      message: `Používateľ ${target.nickname} bol odobratý z kanála #${channel.name}`,
     })
   }
 

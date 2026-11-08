@@ -30,7 +30,6 @@ export default class extends BaseSchema {
       table.text('content').notNullable()
 
       table.timestamp('created_at').notNullable()
-      table.timestamp('updated_at').nullable()
 
       // index pre rychle nacitanie sprav kanala podla casu (infinite scroll)
       table.index(['channel_id', 'created_at'])
