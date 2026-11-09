@@ -1,9 +1,10 @@
 import { defineBoot } from '#q-app'
 import axios from 'axios'
+import { SERVER_URL } from '@/config/app'
 
 // adresa backendu - vsetky poziadavky idu sem
 const api = axios.create({
-  baseURL: 'http://localhost:3333/api/v1',
+  baseURL: `${SERVER_URL}/api/v1`,
   headers: {
     // chceme odpovede zo servera vzdy ako JSON
     Accept: 'application/json',

@@ -318,7 +318,7 @@
 </template>
 
 <script setup>
-import { ref, provide, watch, onMounted, onUnmounted } from 'vue'
+import { ref, provide, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { AppVisibility, useQuasar } from 'quasar'
 import { APP_NAME } from '@/config/app'
@@ -428,77 +428,4 @@ function createChannel() {
 
   showCreateDialog.value = false
 }
-
-// --- simulacia prichadzajucich sprav ---
-
-// ukazkove texty, ktore "posielaju" ostatni pouzivatelia
-const fakeTexts = [
-  'Ahoj, ako sa mate?',
-  'Kto ide dnes na cvicenie?',
-  'Pozrel som si to, vyzera to dobre.',
-  'Mam otazku k zadaniu.',
-  'Diky za info!',
-]
-
-// odkaz na casovac, aby sme ho vedeli pri odchode zastavit
-let simulationTimer = null
-
-// funkcia vyberie nahodny kanal a nahodneho clena, ktory don posle spravu
-function simulateIncomingMessage() {
-  if (chatStore.myChannels.length === 0) return
-
-  // nahodny kanal z kanalov pouzivatela
-  const channelIndex = Math.floor(Math.random() * chatStore.myChannels.length)
-  const channel = chatStore.myChannels[channelIndex]
-
-  // mozni odosielatelia: clenovia kanala okrem mna, ktori nie su offline
-  const senders = []
-  for (const member of channel.members) {
-    const status = getUserStatus(member.name, chatStore.users)
-    if (member.name !== chatStore.currentUser && status !== 'Offline') {
-      senders.push(member.name)
-    }
-  }
-  if (senders.length === 0) return
-
-  // nahodny odosielatel a nahodny text
-  const sender = senders[Math.floor(Math.random() * senders.length)]
-  const text = fakeTexts[Math.floor(Math.random() * fakeTexts.length)]
-
-  // cca kazda tretia sprava spomenie prihlaseneho pouzivatela
-  let fullText = text
-  if (Math.random() < 0.33) {
-    fullText = `@${chatStore.currentUser} ${text}`
-  }
-
-  // nastavime ze pouzivatel zacal pisat spravu a simulujeme postupne prirastanie textu
-  let currentLength = 0
-  const stepInterval = Math.max(50, Math.floor(4000 / fullText.length))
-
-  const typingProgressTimer = setInterval(() => {
-    currentLength += Math.floor(Math.random() * 2) + 1
-    if (currentLength >= fullText.length) {
-      currentLength = fullText.length
-      clearInterval(typingProgressTimer)
-    }
-    const partialText = fullText.slice(0, currentLength)
-    chatStore.setTyping(channel.name, sender, true, partialText)
-  }, stepInterval)
-
-  // po 5 sekundach spravu realne posleme (indikator zhasne)
-  setTimeout(() => {
-    clearInterval(typingProgressTimer)
-    chatStore.receiveMessage(channel.name, sender, fullText)
-  }, 5000)
-}
-
-// po nacitani layoutu spustime simulaciu kazdych 20 sekund
-onMounted(() => {
-  simulationTimer = setInterval(simulateIncomingMessage, 20000)
-})
-
-// pri odchode z layoutu (napr. odhlasenie) casovac zastavime
-onUnmounted(() => {
-  clearInterval(simulationTimer)
-})
 </script>

@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
-import { Dialog, AppVisibility } from 'quasar'
+import { Dialog } from 'quasar'
 import { users } from '@/mockData'
 import {
-  getCurrentTime,
   formatTime,
   get_name_from_nick,
   getUserStatus,
@@ -10,9 +9,9 @@ import {
   notifyError,
   notifyWarning,
   notifyInfo,
-  showSystemNotification,
 } from '@/utils/helper_functions'
 import { api } from '@/boot/axios'
+import { connectSocket, disconnectSocket, getSocket } from '@/utils/socket'
 
 const statusNames = { online: 'Online', dnd: 'DND', offline: 'Offline' }
 
@@ -24,9 +23,6 @@ export const useChatStore = defineStore('chat', {
 
     // zoznam vsetkych registrovanych pouzivatelov s detailami
     users: users,
-
-    // zoznam vsetkych registrovanych pouzivatelov
-    allUsers: users.map((u) => u.nick),
 
     // meno aktualne vybraneho kanala
     activeChannelName: 'general',
@@ -184,9 +180,14 @@ export const useChatStore = defineStore('chat', {
         // aj ked sa odhlasenie na serveri nepodari, v prehliadaci pouzivatela odhlasime
       }
       localStorage.removeItem('token')
+      // odpojime sa od socket.io, aby nam uz neprichadzali spravy
+      disconnectSocket()
       this.currentUser = null
-      // po odhlaseni vycistime zoznam kanalov
+      // po odhlaseni vycistime zoznam kanalov, spravy aj "pise..."
       this.channels = []
+      this.messages = {}
+      this.typingUsers = {}
+      this.typingDrafts = {}
       // po odhlaseni vynulujeme pocet zmeskanych sprav
       this.missedMessagesCount = 0
     },
@@ -223,7 +224,6 @@ export const useChatStore = defineStore('chat', {
       if (!existingUser) {
         existingUser = { nick: user.nickname }
         this.users.push(existingUser)
-        this.allUsers.push(user.nickname)
       }
       existingUser.name = `${user.firstName} ${user.lastName}`
       existingUser.status = statusNames[user.status]
@@ -231,6 +231,73 @@ export const useChatStore = defineStore('chat', {
 
       // nacitame aktualne kanaly pouzivatela zo servera
       await this.fetchChannels()
+
+      // pripojime sa k socket.io, aby nove spravy a zmeny prichadzali hned
+      this.connectToServer()
+    },
+
+    // pripojenie k socket.io serveru a nastavenie, co robit pri udalostiach zo servera
+    connectToServer() {
+      const socket = connectSocket(localStorage.getItem('token'))
+
+      // niekto poslal novu spravu do kanala, v ktorom som clenom
+      socket.on('message:new', (data) => {
+        this.receiveMessage(data.channelName, data.message)
+      })
+
+      // v niektorom mojom kanali sa nieco zmenilo - jednoducho si znova nacitame zoznam kanalov
+      socket.on('channels:changed', () => {
+        this.fetchChannels()
+      })
+
+      // niekto ma pozval do kanala - kanal sa objavi zvyrazneny navrchu zoznamu
+      socket.on('channel:invited', (data) => {
+        notifyInfo(`Boli ste pozvaný do kanála #${data.name}`)
+        this.fetchChannels()
+      })
+
+      // kanal zanikol (spravca ho zrusil alebo bol 30 dni neaktivny)
+      socket.on('channel:deleted', (data) => {
+        delete this.messages[data.name]
+        notifyInfo(`Kanál #${data.name} zanikol`)
+        this.fetchChannels()
+      })
+
+      // niekto v mojom kanali prave pise
+      socket.on('typing', (data) => {
+        const channel = this.channels.find((c) => c.id === data.channelId)
+        if (!channel) return
+
+        // prazdny text znamena, ze prestal pisat
+        const isTyping = data.text !== ''
+        this.setTyping(channel.name, data.nickname, isTyping, data.text)
+      })
+    },
+
+    // poslanie rozpisaneho textu ostatnym clenom aktualneho kanala
+    sendTyping(text) {
+      const socket = getSocket()
+      if (!socket || !this.activeChannel) return
+
+      socket.emit('typing', {
+        channelId: this.activeChannel.id,
+        text: text,
+      })
+    },
+
+    // prida spravu na koniec zoznamu sprav kanala, iba ak tam este nie je
+    addMessage(channelName, message) {
+      if (!this.messages[channelName]) {
+        this.messages[channelName] = []
+      }
+
+      const alreadyAdded = this.messages[channelName].some((m) => m.id === message.id)
+      if (alreadyAdded) {
+        return false
+      }
+
+      this.messages[channelName].push(message)
+      return true
     },
 
     // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)
@@ -302,50 +369,24 @@ export const useChatStore = defineStore('chat', {
       user.onlyMentions = value
     },
 
-    // prijatie novej spravy od ineho pouzivatela
-    receiveMessage(channelName, sender, text) {
-      if (!this.messages[channelName]) {
-        this.messages[channelName] = []
+    // prijatie novej spravy zo servera cez socket.io
+    receiveMessage(channelName, serverMessage) {
+      const message = this.convertServerMessage(serverMessage)
+      const sender = message.user
+
+      // receivedAt = kedy sprava prisla
+      message.receivedAt = Date.now()
+
+      // spravu ulozime iba ak uz mame spravy kanala nacitane
+      let isNew = true
+      if (this.messages[channelName]) {
+        isNew = this.addMessage(channelName, message)
       }
 
-      // sprava sa ulozi vzdy, aj ked je pouzivatel offline
-      // receivedAt = kedy sprava prisla
-      this.messages[channelName].push({
-        user: sender,
-        time: getCurrentTime(),
-        text: text,
-        receivedAt: Date.now(),
-      })
-
-      // ked pouzivatel posle spravu, zrusime jeho stav pisania
+      // odosielatel uz nepise
       this.setTyping(channelName, sender, false)
 
-      // notifikaciu vystavime iba ak je pouzivatel online (nie DND ani offline)
-      // a aplikacia nie je v stave "visible" (AppVisibility)
-      if (this.currentUserStatus === 'Online' && !AppVisibility.appVisible) {
-        let shouldNotify = true
-        // ak ma pouzivatel zapnute notifikacie iba pre adresovane spravy, skontrolujeme ci sprava obsahuje jeho @nick
-        if (this.currentUserOnlyMentions) {
-          shouldNotify = text.includes(`@${this.currentUser}`)
-        }
-
-        if (shouldNotify) {
-          // systemova notifikacia prehliadaca
-          const notification = showSystemNotification(channelName, sender, text)
-
-          // po kliknuti na notifikaciu sa vratime do aplikacie a otvorime kanal so spravou
-          if (notification) {
-            notification.onclick = () => {
-              window.focus()
-              this.selectChannel(channelName)
-              notification.close()
-            }
-          }
-
-          // zvysime pocet zmeskanych sprav
-          this.missedMessagesCount++
-        }
-      }
+      if (sender === this.currentUser || !isNew) return
     },
 
     // prevod spravy zo servera na tvar, ktory pouziva zobrazenie sprav (IndexPage)
@@ -573,13 +614,8 @@ export const useChatStore = defineStore('chat', {
           content: text.trim(),
         })
 
-        // ak nahodou pre dany kanal este neexistuje pole sprav, vytvorime ho
-        if (!this.messages[channelName]) {
-          this.messages[channelName] = []
-        }
-
         // ulozenu spravu pridame na koniec zoznamu sprav kanala
-        this.messages[channelName].push(this.convertServerMessage(response.data))
+        this.addMessage(channelName, this.convertServerMessage(response.data))
       } catch (error) {
         notifyError(error.response?.data?.message || 'Správu sa nepodarilo odoslať')
       }

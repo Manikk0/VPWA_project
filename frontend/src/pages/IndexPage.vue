@@ -282,6 +282,15 @@ const messagesContainer = ref(null)
 // text v prikazovom riadku
 const messageText = ref('')
 
+// pri kazdej zmene textu posleme rozpisany text ostatnym clenom kanala ("... prave pise")
+watch(messageText, (text) => {
+  if (text.startsWith('/')) {
+    chatStore.sendTyping('')
+  } else {
+    chatStore.sendTyping(text)
+  }
+})
+
 // funkcia na pozvanie clena cez dialog po kliknuti na tlacidlo
 function promptInviteUser() {
   Dialog.create({

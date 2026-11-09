@@ -5,6 +5,13 @@ import ChannelBan from '#models/channel_ban'
 import KickVote from '#models/kick_vote'
 import User from '#models/user'
 import db from '@adonisjs/lucid/services/db'
+import {
+  emitToUser,
+  notifyChannelChanged,
+  addUserToChannelRoom,
+  removeUserFromChannelRoom,
+  closeChannelRoom,
+} from '#services/socket'
 
 // trvaly ban - pouzivatel prestane byt clenom, takze kanal zmizne z jeho zoznamu
 async function banUser(channel: Channel, userId: number) {
@@ -13,6 +20,10 @@ async function banUser(channel: Channel, userId: number) {
 
   // hlasy proti tomuto pouzivatelovi uz netreba
   await KickVote.query().where('channelId', channel.id).where('targetUserId', userId).delete()
+
+  // vyhodeny pouzivatel prestane dostavat spravy z kanala a kanal mu hned zmizne zo zoznamu
+  removeUserFromChannelRoom(userId, channel.id)
+  emitToUser(userId, 'channels:changed', {})
 }
 
 export default class ChannelsController {
@@ -135,6 +146,10 @@ export default class ChannelsController {
         },
       })
 
+      // novy clen zacne dostavat spravy z kanala a ostatni clenovia hned uvidia noveho clena
+      addUserToChannelRoom(user.id, channel.id)
+      notifyChannelChanged(channel.id)
+
       return response.ok({
         message: `Pridali ste sa do verejného kanála #${channel.name}`,
         channel: channel,
@@ -157,6 +172,9 @@ export default class ChannelsController {
         joined_at: DateTime.now().toSQL(),
       },
     })
+
+    // spravca zacne dostavat spravy z noveho kanala
+    addUserToChannelRoom(user.id, channel.id)
 
     const typText = channel.type === 'private' ? 'súkromný' : 'verejný'
     return response.created({
@@ -184,6 +202,8 @@ export default class ChannelsController {
     // spravca odchadza - zmazeme kanal (clenstva a spravy zmaze databaza cez CASCADE)
     if (channel.createdByUserId === user.id) {
       await channel.delete()
+      // ostatnym clenom kanal hned zmizne zo zoznamu
+      closeChannelRoom(channel.id, channel.name)
       return response.ok({
         message: `Kanál #${channel.name} zanikol`,
         channelDeleted: true,
@@ -192,6 +212,10 @@ export default class ChannelsController {
 
     // bezny clen - zmazeme iba jeho zaznam v channel_members
     await channel.related('members').detach([user.id])
+
+    // pouzivatel prestane dostavat spravy z kanala, ostatni clenovia hned uvidia zmenu v zozname clenov
+    removeUserFromChannelRoom(user.id, channel.id)
+    notifyChannelChanged(channel.id)
 
     return response.ok({
       message: `Opustili ste kanál #${channel.name}`,
@@ -213,6 +237,9 @@ export default class ChannelsController {
     }
 
     await channel.delete()
+
+    // vsetkym clenom kanal hned zmizne zo zoznamu
+    closeChannelRoom(channel.id, channel.name)
 
     return response.ok({ message: `Kanál #${channel.name} zanikol` })
   }
@@ -265,6 +292,8 @@ export default class ChannelsController {
     // spravca vyhadzuje natrvalo hned
     if (channel.createdByUserId === user.id) {
       await banUser(channel, target.id)
+      // ostatni clenovia hned uvidia zmenu v zozname clenov a zabanovanych
+      notifyChannelChanged(channel.id)
       return response.ok({
         message: `Používateľ ${target.nickname} bol správcom natrvalo vyhodený z #${channel.name}`,
         banned: true,
@@ -290,6 +319,8 @@ export default class ChannelsController {
     const votes = await KickVote.query()
       .where('channelId', channel.id)
       .where('targetUserId', target.id)
+
+    notifyChannelChanged(channel.id)
 
     // ak su aspon 3 hlasy, pouzivatel dostane trvaly ban
     if (votes.length >= 3) {
@@ -371,6 +402,10 @@ export default class ChannelsController {
       },
     })
 
+    addUserToChannelRoom(target.id, channel.id)
+    notifyChannelChanged(channel.id)
+    emitToUser(target.id, 'channel:invited', { name: channel.name })
+
     return response.ok({
       message: `Používateľ ${target.nickname} bol úspešne pridaný do kanála #${channel.name}`,
     })
@@ -414,6 +449,11 @@ export default class ChannelsController {
 
     // zmazeme zaznam pouzivatela v channel_members - kanal mu zmizne zo zoznamu
     await channel.related('members').detach([target.id])
+
+    // odobraty prestane dostavat spravy a kanal mu hned zmizne, ostatni uvidia zmenu clenov
+    removeUserFromChannelRoom(target.id, channel.id)
+    emitToUser(target.id, 'channels:changed', {})
+    notifyChannelChanged(channel.id)
 
     return response.ok({
       message: `Používateľ ${target.nickname} bol odobratý z kanála #${channel.name}`,

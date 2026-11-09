@@ -1,14 +1,6 @@
 import { Notify } from 'quasar'
 import { users } from '@/mockData'
 
-// funkcia vrati aktualny cas vo formate hodiny:minuty
-export function getCurrentTime() {
-  const now = new Date()
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  return `${hours}:${minutes}`
-}
-
 // funkcia prevedie datum zo servera na cas
 // cas sa zobrazi podla casoveho pasma prehliadaca
 export function formatTime(dateFromServer) {

@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Channel from '#models/channel'
 import Message from '#models/message'
 import { createMessageValidator } from '#validators/message'
+import { emitToChannel } from '#services/socket'
 
 // kolko sprav posleme naraz
 const PAGE_SIZE = 20
@@ -132,6 +133,13 @@ export default class MessagesController {
     // nacitame odosielatela a oznacenych, aby sme spravu vratili v rovnakom tvare ako pri nacitani
     await message.load('sender')
     await message.load('mentions')
+
+    // novu spravu hned posleme vsetkym pripojenym clenom kanala
+    emitToChannel(channel.id, 'message:new', {
+      channelId: channel.id,
+      channelName: channel.name,
+      message: messageToJson(message),
+    })
 
     return response.created(messageToJson(message))
   }

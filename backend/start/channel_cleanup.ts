@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 import Channel from '#models/channel'
 import Message from '#models/message'
+import { closeChannelRoom } from '#services/socket'
 
 // kanal bez novej spravy dlhsie ako tento pocet dni zanikne
 const INACTIVE_DAYS = 30
@@ -32,6 +33,8 @@ async function deleteInactiveChannels() {
     if (lastActivity.toMillis() < limit.toMillis()) {
       // clenstva, spravy, bany a hlasy sa zmazu v databaze cez CASCADE
       await channel.delete()
+      // pripojenym clenom kanal hned zmizne zo zoznamu
+      closeChannelRoom(channel.id, channel.name)
       console.log(`Kanal #${channel.name} zanikol - viac ako ${INACTIVE_DAYS} dni bez novej spravy`)
     }
   }

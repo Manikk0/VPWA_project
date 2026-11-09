@@ -69,6 +69,8 @@ export default defineConfig({
     () => import('#start/validator'),
     // mazanie kanalov bez aktivity 30 dni
     { file: () => import('#start/channel_cleanup'), environment: ['web'] },
+    // socket.io - okamzite posielanie sprav a zmien v kanaloch
+    { file: () => import('#start/socket'), environment: ['web'] },
   ],
 
   /*
