@@ -3,7 +3,8 @@ import vine from '@vinejs/vine'
 /**
  * Shared rules for email and password.
  */
-const email = () => vine.string().email().maxLength(254)
+// email ukladame malymi pismenami, aby Test@x.sk a test@x.sk bol ten isty email
+const email = () => vine.string().trim().toLowerCase().email().maxLength(254)
 const password = () => vine.string().minLength(8).maxLength(32)
 
 /**
@@ -13,13 +14,15 @@ export const signupValidator = vine.create({
   // meno a priezvisko su povinne
   firstName: vine.string().trim().minLength(1).maxLength(100),
   lastName: vine.string().trim().minLength(1).maxLength(100),
-  // prezyvka musi byt unikatna a nesmie obsahovat medzery
+  // prezyvka musi byt unikatna a moze obsahovat iba pismena bez diakritiky, cisla a _
+  // ukladame ju malymi pismenami
   nickname: vine
     .string()
     .trim()
+    .toLowerCase()
     .minLength(1)
     .maxLength(50)
-    .regex(/^\S+$/)
+    .regex(/^[a-z0-9_]+$/)
     .unique({ table: 'users', column: 'nickname' }),
   email: email().unique({ table: 'users', column: 'email' }),
   password: password(),
@@ -32,6 +35,6 @@ export const signupValidator = vine.create({
  */
 export const loginValidator = vine.create({
   // email alebo prezyvka (nickname) - prihlasit sa da oboma
-  login: vine.string().trim().minLength(1),
+  login: vine.string().trim().toLowerCase().minLength(1),
   password: vine.string(),
 })
