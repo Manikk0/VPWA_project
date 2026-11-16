@@ -387,7 +387,13 @@ async function onLoadOlderMessages(index, done) {
 // a zakazeme infinite scroll kym pouzivatel nescroloval
 watch(
   () => chatStore.activeChannelName,
-  async (channelName) => {
+  async (channelName, oldChannelName) => {
+    // ak sme v predchadzajucom kanali nieco pisali, oznamime tam, ze uz nepiseme
+    // (inak by tam ostatni stale videli "... prave pise")
+    if (oldChannelName && messageText.value) {
+      chatStore.sendTyping('', oldChannelName)
+    }
+
     userScrolledUp.value = false
     // v offline stave nove spravy zo servera nenacitavame (nacitaju sa az po prepnuti do online)
     if (channelName && chatStore.currentUserStatus !== 'Offline') {

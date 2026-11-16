@@ -269,13 +269,15 @@ export const useChatStore = defineStore('chat', {
       })
     },
 
-    // poslanie rozpisaneho textu ostatnym clenom aktualneho kanala
-    sendTyping(text) {
+    // poslanie rozpisaneho textu ostatnym clenom kanala
+    // ak nezadame nazov kanala, posle sa do aktualne otvoreneho kanala
+    sendTyping(text, channelName = this.activeChannelName) {
       const socket = getSocket()
-      if (!socket || !this.activeChannel) return
+      const channel = this.channels.find((c) => c.name === channelName)
+      if (!socket || !channel) return
 
       socket.emit('typing', {
-        channelId: this.activeChannel.id,
+        channelId: channel.id,
         text: text,
       })
     },
@@ -308,6 +310,12 @@ export const useChatStore = defineStore('chat', {
         if (statusNames[key] === newStatus) {
           serverStatus = key
         }
+      }
+
+      // pred prepnutim do offline oznamime ostatnym, ze uz nepiseme
+      // (po prepnuti uz nebudeme v miestnosti kanala a oznam by sa k nim nedostal)
+      if (newStatus === 'Offline') {
+        this.sendTyping('')
       }
 
       // novy stav ulozime na serveri, aby ho videli aj ostatni pouzivatelia
@@ -667,7 +675,8 @@ export const useChatStore = defineStore('chat', {
       }
 
       // spravca nemoze odobrat sam seba
-      if (nickName === this.currentUser) {
+      // nicky porovnavame malymi pismenami (@NicK a @nick je ten isty pouzivatel)
+      if (nickName.toLowerCase() === this.currentUser) {
         notifyWarning('Nemôžete odobrať sám seba. Na zrušenie kanála použite /quit')
         return
       }

@@ -61,11 +61,21 @@ app.ready(() => {
     }
 
     // pouzivatel prave pise spravu - rozpisany text posleme ostatnym clenom kanala
+    // id kanala, v ktorom pouzivatel prave nieco pise (null ak nepise)
+    let typingChannelId: number | null = null
+
     socket.on('typing', (data) => {
       const room = channelRoom(data.channelId)
 
       // posielat moze iba clen kanala
       if (!socket.rooms.has(room)) return
+
+      // zapamatame si, v ktorom kanali pouzivatel pise (prazdny text = prestal pisat)
+      if (data.text !== '') {
+        typingChannelId = data.channelId
+      } else {
+        typingChannelId = null
+      }
 
       // socket.to(...) posle udalost vsetkym v miestnosti okrem odosielatela
       socket.to(room).emit('typing', {
@@ -73,6 +83,19 @@ app.ready(() => {
         nickname: user.nickname,
         text: data.text,
       })
+    })
+
+    // pouzivatel zatvoril okno (alebo sa odhlasil) pocas pisania
+    // ostatnym posleme prazdny text, aby im nezostalo visiet "... prave pise"
+    // pouzivame 'disconnecting', lebo vtedy je socket este v miestnostiach kanalov
+    socket.on('disconnecting', () => {
+      if (typingChannelId !== null) {
+        socket.to(channelRoom(typingChannelId)).emit('typing', {
+          channelId: typingChannelId,
+          nickname: user.nickname,
+          text: '',
+        })
+      }
     })
   })
 })

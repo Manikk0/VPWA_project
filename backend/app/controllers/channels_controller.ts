@@ -249,7 +249,8 @@ export default class ChannelsController {
   // vyhodenie clena cez /kick - spravca hned, bezni clenovia po 3 hlasoch
   async kick({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const nickname = request.input('nickname')?.trim()
+    // nicky su v databaze ulozene malymi pismenami, preto aj zadany nick prevedieme na male pismena
+    const nickname = request.input('nickname')?.trim().toLowerCase()
 
     const channel = await Channel.find(params.id)
     if (!channel) {
@@ -343,7 +344,9 @@ export default class ChannelsController {
   // pozvany pouzivatel ma kanal zvyrazneny a navrchu zoznamu, kym ho neotvori
   async invite({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const nickname = request.input('nickname')?.trim()
+    // nicky su v databaze ulozene malymi pismenami, preto aj zadany nick prevedieme na male pismena
+    // (/invite @NiCk a /invite @nick je ten isty pouzivatel)
+    const nickname = request.input('nickname')?.trim().toLowerCase()
 
     const channel = await Channel.find(params.id)
     if (!channel) {
@@ -419,7 +422,9 @@ export default class ChannelsController {
   // odobratie clena zo sukromneho kanala cez /revoke (iba spravca)
   async revoke({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const nickname = request.input('nickname')?.trim()
+    // nicky su v databaze ulozene malymi pismenami, preto aj zadany nick prevedieme na male pismena
+    // (/revoke @NiCk a /revoke @nick je ten isty pouzivatel)
+    const nickname = request.input('nickname')?.trim().toLowerCase()
 
     const channel = await Channel.find(params.id)
     if (!channel) {

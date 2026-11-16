@@ -109,7 +109,11 @@ export default class MessagesController {
     for (const word of content.split(' ')) {
       if (word.startsWith('@')) {
         // odstranime @ a znaky ako ciarka ci vykricnik na konci
-        const nick = word.slice(1).replace(/[^a-zA-Z0-9_]/g, '')
+        // nicky su v databaze ulozene malymi pismenami, preto aj nick zo spravy prevedieme na male pismena
+        const nick = word
+          .slice(1)
+          .replace(/[^a-zA-Z0-9_]/g, '')
+          .toLowerCase()
         if (nick && !mentionedNicks.includes(nick)) {
           mentionedNicks.push(nick)
         }
