@@ -389,7 +389,8 @@ watch(
   () => chatStore.activeChannelName,
   async (channelName) => {
     userScrolledUp.value = false
-    if (channelName) {
+    // v offline stave nove spravy zo servera nenacitavame (nacitaju sa az po prepnuti do online)
+    if (channelName && chatStore.currentUserStatus !== 'Offline') {
       await chatStore.fetchMessages(channelName)
     }
     scrollToBottom()

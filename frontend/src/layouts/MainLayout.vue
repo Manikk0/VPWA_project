@@ -115,6 +115,7 @@
             >KANÁLY</span
           >
           <!-- tlacidlo na vytvorenie kanala cez dialog -->
+          <!-- v offline stave je disablnute -->
           <q-btn
             flat
             dense
@@ -122,6 +123,7 @@
             :size="$q.screen.lt.sm ? 'xs' : 'sm'"
             icon="add"
             class="text-dry-sage"
+            :disable="chatStore.currentUserStatus === 'Offline'"
             @click="openCreateDialog"
           >
             <q-tooltip>Vytvoriť kanál</q-tooltip>

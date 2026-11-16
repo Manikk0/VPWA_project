@@ -52,9 +52,12 @@ app.ready(() => {
     socket.join(userRoom(user.id))
 
     // miestnosti vsetkych kanalov, v ktorych je clenom - tu prichadzaju nove spravy
-    const channels = await user.related('channels').query()
-    for (const channel of channels) {
-      socket.join(channelRoom(channel.id))
+    // ak je pouzivatel offline, do miestnosti ho nepripojime, aby mu spravy neprichadzali
+    if (user.status !== 'offline') {
+      const channels = await user.related('channels').query()
+      for (const channel of channels) {
+        socket.join(channelRoom(channel.id))
+      }
     }
 
     // pouzivatel prave pise spravu - rozpisany text posleme ostatnym clenom kanala

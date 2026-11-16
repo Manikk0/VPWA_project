@@ -38,3 +38,8 @@ export const loginValidator = vine.create({
   login: vine.string().trim().toLowerCase().minLength(1),
   password: vine.string(),
 })
+
+// kontrola noveho stavu pouzivatela
+export const statusValidator = vine.create({
+  status: vine.enum(['online', 'dnd', 'offline']),
+})

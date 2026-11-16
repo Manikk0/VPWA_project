@@ -8,6 +8,7 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
+    'profile.profile.update_status': { paramsTuple?: []; params?: {} }
     'channels.channels.index': { paramsTuple?: []; params?: {} }
     'channels.channels.join': { paramsTuple?: []; params?: {} }
     'channels.channels.leave': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -40,6 +41,9 @@ export type ScannedRoutes = {
     'channels.channels.revoke': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'channels.channels.seen': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'channels.messages.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+  }
+  PATCH: {
+    'profile.profile.update_status': { paramsTuple?: []; params?: {} }
   }
   DELETE: {
     'channels.channels.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

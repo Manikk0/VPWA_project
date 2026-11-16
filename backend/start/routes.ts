@@ -29,6 +29,8 @@ router
       .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])
+        // zmena stavu pouzivatela (online, dnd, offline)
+        router.patch('status', [controllers.Profile, 'updateStatus'])
       })
       .prefix('account')
       .as('profile')

@@ -55,6 +55,8 @@ export default class ChannelsController {
           name: member.nickname,
           fullName: `${member.firstName} ${member.lastName}`,
           role: member.id === channel.createdByUserId ? 'admin' : 'member',
+          // status clena, ktory zobrazuje sa ostatnym clenom kanala
+          status: member.status,
         })
       }
 
@@ -402,7 +404,10 @@ export default class ChannelsController {
       },
     })
 
-    addUserToChannelRoom(target.id, channel.id)
+    // offline pouzivatela do miestnosti kanala nepripojime - spravy z kanala uvidi az po prepnuti do online stavu
+    if (target.status !== 'offline') {
+      addUserToChannelRoom(target.id, channel.id)
+    }
     notifyChannelChanged(channel.id)
     emitToUser(target.id, 'channel:invited', { name: channel.name })
 

@@ -36,10 +36,6 @@ export const useChatStore = defineStore('chat', {
     // ci ma kanal na serveri este starsie spravy, ktore sme nenacitali
     hasMoreMessages: {},
 
-    // cas (v milisekundach), kedy sa pouzivatel prepol do offline - null ak nie je offline
-    // spravy, ktore prisli po tomto case, sa v offline stave nezobrazuju
-    offlineSince: null,
-
     // slovnik pre pisucich pouzivatelov v kanaloch { general: ['ed', 'mara'] }
     typingUsers: {},
 
@@ -76,21 +72,7 @@ export const useChatStore = defineStore('chat', {
 
     // vrati nacitane spravy pre aktualne vybrany kanal
     activeMessages() {
-      const allMessages = this.messages[this.activeChannelName] || []
-
-      // ak pouzivatel nie je offline, zobrazime vsetky nacitane spravy
-      if (this.currentUserStatus !== 'Offline' || !this.offlineSince) {
-        return allMessages
-      }
-
-      // v offline stave skryjeme spravy, ktore prisli az po prepnuti do offline
-      const result = []
-      for (const message of allMessages) {
-        if (!message.receivedAt || message.receivedAt <= this.offlineSince) {
-          result.push(message)
-        }
-      }
-      return result
+      return this.messages[this.activeChannelName] || []
     },
 
     // vrati iba kanaly, v ktorych je prihlaseny pouzivatel clenom
@@ -199,6 +181,19 @@ export const useChatStore = defineStore('chat', {
         // server vrati zoznam kanalov, v ktorych je prihlaseny pouzivatel clenom
         this.channels = response.data
 
+        // stavy clenov zo servera ulozime do zoznamu pouzivatelov
+        // panel clenov zobrazuje stav cez getUserStatus, ktory cita prave tento zoznam
+        for (const channel of this.channels) {
+          for (const member of channel.members) {
+            let existingUser = this.users.find((u) => u.nick === member.nickname)
+            if (!existingUser) {
+              existingUser = { nick: member.nickname, name: member.fullName }
+              this.users.push(existingUser)
+            }
+            existingUser.status = statusNames[member.status]
+          }
+        }
+
         // ak aktualne vybrany kanal uz neexistuje medzi kanalmi pouzivatela, prepneme na prvy
         const stillInActive = this.channels.some((c) => c.name === this.activeChannelName)
         if (!stillInActive) {
@@ -301,25 +296,37 @@ export const useChatStore = defineStore('chat', {
     },
 
     // zmena stavu prihlaseneho pouzivatela (Online, DND, Offline)
-    setStatus(newStatus) {
+    async setStatus(newStatus) {
       const user = this.users.find((u) => u.nick === this.currentUser)
       if (!user) return
 
       // ak pouzivatel klikol na stav, ktory uz ma, nic nemenime
       if (user.status === newStatus) return
 
-      const wasOffline = user.status === 'Offline'
-
-      // pri prepnuti do offline si zapamatame cas - novsie spravy sa nebudu zobrazovat
-      if (newStatus === 'Offline' && !wasOffline) {
-        this.offlineSince = Date.now()
+      let serverStatus = null
+      for (const key in statusNames) {
+        if (statusNames[key] === newStatus) {
+          serverStatus = key
+        }
       }
+
+      // novy stav ulozime na serveri, aby ho videli aj ostatni pouzivatelia
+      try {
+        await api.patch('/account/status', { status: serverStatus })
+      } catch {
+        notifyError('Nepodarilo sa zmeniť stav')
+        return
+      }
+
+      const wasOffline = user.status === 'Offline'
 
       user.status = newStatus
 
       // po navrate z offline sa kanaly aktualizuju
+      // znova nacitame zoznam kanalov a spravy otvoreneho kanala (aj tie, co prisli pocas offline)
       if (wasOffline && newStatus !== 'Offline') {
-        this.offlineSince = null
+        await this.fetchChannels()
+        await this.fetchMessages(this.activeChannelName)
       }
 
       // kratka informacna notifikacia podla noveho stavu
@@ -373,9 +380,6 @@ export const useChatStore = defineStore('chat', {
     receiveMessage(channelName, serverMessage) {
       const message = this.convertServerMessage(serverMessage)
       const sender = message.user
-
-      // receivedAt = kedy sprava prisla
-      message.receivedAt = Date.now()
 
       // spravu ulozime iba ak uz mame spravy kanala nacitane
       let isNew = true

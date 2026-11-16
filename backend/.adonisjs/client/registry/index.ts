@@ -32,6 +32,12 @@ const routes = {
     tokens: [[0,"api"],[0,"v1"],[0,"account"],[0,"logout"]],
     types: placeholder as Registry['profile.access_tokens.destroy']['types'],
   },
+  'profile.profile.update_status': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/account/status',
+    tokens: [[0,"api"],[0,"v1"],[0,"account"],[0,"status"]],
+    types: placeholder as Registry['profile.profile.update_status']['types'],
+  },
   'channels.channels.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/channels',
