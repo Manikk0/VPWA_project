@@ -73,6 +73,19 @@ export interface Registry {
       rawResponse: ExtractRawResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['updateStatus']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'profile.profile.update_notifications': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/account/notifications'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/user').notificationsValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user').notificationsValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['updateNotifications']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['updateNotifications']>>> | { status: 422; response: { errors: SimpleError[] } }
+      rawResponse: ExtractRawResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['updateNotifications']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'channels.channels.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/channels'

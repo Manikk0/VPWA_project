@@ -14,6 +14,7 @@ export interface ApiDefinition {
     profile: {
       show: typeof routes['profile.profile.show']
       updateStatus: typeof routes['profile.profile.update_status']
+      updateNotifications: typeof routes['profile.profile.update_notifications']
     }
     accessTokens: {
       destroy: typeof routes['profile.access_tokens.destroy']

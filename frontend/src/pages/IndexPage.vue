@@ -238,11 +238,30 @@
         />
       </div>
     </div>
+
+    <!-- dialog s rozpisanym textom pouzivatela - text sa meni nazivo, ako pouzivatel pise -->
+    <q-dialog v-model="draftDialogOpen">
+      <q-card style="width: 100%; max-width: 450px">
+        <q-card-section class="text-h6 text-pine-teal">
+          Rozpísaná správa od @{{ draftNick }}
+        </q-card-section>
+
+        <!-- rozpisany text (dlhy text sa zalomi) -->
+        <q-card-section class="q-pt-none" style="white-space: pre-wrap; word-break: break-word">
+          <span v-if="draftText">"{{ draftText }}"</span>
+          <span v-else class="text-grey-7 text-italic">Momentálne nič nepíše...</span>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Zavrieť" color="fern" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { ref, inject, nextTick, watch } from 'vue'
+import { ref, inject, nextTick, watch, computed } from 'vue'
 import { useChatStore } from '@/stores/chatStore'
 import { Dialog, useQuasar } from 'quasar'
 import { notifyWarning } from '@/utils/helper_functions'
@@ -309,18 +328,17 @@ function promptInviteUser() {
   })
 }
 
-// zobrazi dialog s rozpisanym textom pouzivatela po kliknuti na jeho nick
+// dialog s rozpisanym textom
+const draftDialogOpen = ref(false)
+const draftNick = ref('')
+
+// rozpisany text sa cita zo store, preto sa dialog prekresli pri kazdej zmene textu (nazivo)
+const draftText = computed(() => chatStore.getTypingDraft(draftNick.value))
+
+// otvori dialog s rozpisanym textom pouzivatela po kliknuti na jeho nick
 function showTypingDraft(nick) {
-  const draft = chatStore.getTypingDraft(nick)
-  Dialog.create({
-    title: `Rozpísaná správa od @${nick}`,
-    message: draft ? `"${draft}"` : 'Zatiaľ nezadal žiadny text...',
-    color: 'pine-teal',
-    ok: {
-      label: 'Zavrieť',
-      color: 'fern',
-    },
-  })
+  draftNick.value = nick
+  draftDialogOpen.value = true
 }
 
 // funkcia zisti ci je v sprave spomenuty aktualne prihlaseny pouzivatel so zavinacom

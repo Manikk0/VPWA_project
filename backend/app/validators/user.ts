@@ -43,3 +43,8 @@ export const loginValidator = vine.create({
 export const statusValidator = vine.create({
   status: vine.enum(['online', 'dnd', 'offline']),
 })
+
+// kontrola nastavenia notifikacii
+export const notificationsValidator = vine.create({
+  onlyMentions: vine.boolean(),
+})

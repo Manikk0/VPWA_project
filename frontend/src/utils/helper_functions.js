@@ -1,5 +1,4 @@
 import { Notify } from 'quasar'
-import { users } from '@/mockData'
 
 // funkcia prevedie datum zo servera na cas
 // cas sa zobrazi podla casoveho pasma prehliadaca
@@ -11,7 +10,8 @@ export function formatTime(dateFromServer) {
 }
 
 // funkcia vrati cele meno pouzivatela podla zadaneho nicku
-export function get_name_from_nick(nickname, usersList = users) {
+// usersList = zoznam pouzivatelov zo store (chatStore.users)
+export function get_name_from_nick(nickname, usersList) {
   if (!nickname) return ''
   const cleanNick = nickname.startsWith('@') ? nickname.slice(1) : nickname
   const user = usersList.find((u) => u.nick === cleanNick || u.nick === nickname)
@@ -19,7 +19,8 @@ export function get_name_from_nick(nickname, usersList = users) {
 }
 
 // funkcia vrati stav pouzivatela (Online, DND, Offline) podla nicku
-export function getUserStatus(nickname, usersList = users) {
+// usersList = zoznam pouzivatelov zo store (chatStore.users)
+export function getUserStatus(nickname, usersList) {
   const user = usersList.find((u) => u.nick === nickname)
   // ak pouzivatel nema nastaveny stav, berieme ze je online
   if (!user || !user.status) return 'Online'

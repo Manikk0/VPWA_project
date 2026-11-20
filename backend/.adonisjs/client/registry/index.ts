@@ -38,6 +38,12 @@ const routes = {
     tokens: [[0,"api"],[0,"v1"],[0,"account"],[0,"status"]],
     types: placeholder as Registry['profile.profile.update_status']['types'],
   },
+  'profile.profile.update_notifications': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/account/notifications',
+    tokens: [[0,"api"],[0,"v1"],[0,"account"],[0,"notifications"]],
+    types: placeholder as Registry['profile.profile.update_notifications']['types'],
+  },
   'channels.channels.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/channels',

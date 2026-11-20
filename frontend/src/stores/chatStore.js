@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
-import { Dialog } from 'quasar'
-import { users } from '@/mockData'
+import { Dialog, AppVisibility } from 'quasar'
 import {
   formatTime,
+  showSystemNotification,
   get_name_from_nick,
   getUserStatus,
   notifySuccess,
@@ -21,8 +21,9 @@ export const useChatStore = defineStore('chat', {
     // aktualne prihlaseny pouzivatel (predvolene ziadny, nutne sa prihlasit)
     currentUser: null,
 
-    // zoznam vsetkych registrovanych pouzivatelov s detailami
-    users: users,
+    // zoznam pouzivatelov (prihlaseny + clenovia jeho kanalov)
+    // kazdy pouzivatel: { nick, name, status, onlyMentions }
+    users: [],
 
     // meno aktualne vybraneho kanala
     activeChannelName: 'general',
@@ -165,7 +166,8 @@ export const useChatStore = defineStore('chat', {
       // odpojime sa od socket.io, aby nam uz neprichadzali spravy
       disconnectSocket()
       this.currentUser = null
-      // po odhlaseni vycistime zoznam kanalov, spravy aj "pise..."
+      // po odhlaseni vycistime zoznam pouzivatelov, kanalov, spravy aj "pise..."
+      this.users = []
       this.channels = []
       this.messages = {}
       this.typingUsers = {}
@@ -213,8 +215,7 @@ export const useChatStore = defineStore('chat', {
 
       this.currentUser = user.nickname
 
-      // docasne kanaly a spravy su zatial z mockData.js, ktore pracuju so zoznamom this.users
-      // preto pouzivatela zo servera pridame / aktualizujeme aj v tomto zozname
+      // prihlaseneho pouzivatela zo servera pridame / aktualizujeme v zozname pouzivatelov
       let existingUser = this.users.find((u) => u.nick === user.nickname)
       if (!existingUser) {
         existingUser = { nick: user.nickname }
@@ -377,10 +378,20 @@ export const useChatStore = defineStore('chat', {
       return this.typingDrafts[this.activeChannelName][nick] || ''
     },
 
-    // zapnutie / vypnutie notifikacii iba pre spravy s @nick
-    setOnlyMentions(value) {
+    // zapnutie / vypnutie notifikacii iba pre spravy s nickom
+    // nastavenie sa ulozi na serveri, aby ostalo aj po odhlaseni
+    async setOnlyMentions(value) {
       const user = this.users.find((u) => u.nick === this.currentUser)
       if (!user) return
+
+      try {
+        await api.patch('/account/notifications', { onlyMentions: value })
+      } catch {
+        notifyError('Nepodarilo sa uložiť nastavenie upozornení')
+        return
+      }
+
+      // server nastavenie ulozil, zmenime ho aj v prehliadaci
       user.onlyMentions = value
     },
 
@@ -398,7 +409,36 @@ export const useChatStore = defineStore('chat', {
       // odosielatel uz nepise
       this.setTyping(channelName, sender, false)
 
+      // vlastnu spravu a spravu, ktoru uz mame, neoznamujeme
       if (sender === this.currentUser || !isNew) return
+
+      // notifikaciu ukazeme iba ak aplikacia nie je viditelna
+      if (AppVisibility.appVisible) return
+
+      // v stave DND notifikacie nechodia
+      if (this.currentUserStatus !== 'Online') return
+
+      // ak chce pouzivatel iba spravy s jeho nickom, ostatne spravy preskocime
+      let mentionsMe = false
+      if (message.mentions && message.mentions.includes(this.currentUser)) {
+        mentionsMe = true
+      }
+      if (this.currentUserOnlyMentions && !mentionsMe) return
+
+      // spravu zapocitame do zmeskanych
+      this.missedMessagesCount++
+
+      // systemova notifikacia s odosielatelom a castou spravy
+      const notification = showSystemNotification(channelName, sender, message.text)
+
+      // po kliknuti na notifikaciu sa vratime do aplikacie a otvorime kanal so spravou
+      if (notification) {
+        notification.onclick = () => {
+          window.focus()
+          this.selectChannel(channelName)
+          notification.close()
+        }
+      }
     },
 
     // prevod spravy zo servera na tvar, ktory pouziva zobrazenie sprav (IndexPage)

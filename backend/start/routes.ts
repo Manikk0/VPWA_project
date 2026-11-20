@@ -31,6 +31,8 @@ router
         router.post('logout', [controllers.AccessTokens, 'destroy'])
         // zmena stavu pouzivatela (online, dnd, offline)
         router.patch('status', [controllers.Profile, 'updateStatus'])
+        // zmena nastavenia notifikacii
+        router.patch('notifications', [controllers.Profile, 'updateNotifications'])
       })
       .prefix('account')
       .as('profile')
